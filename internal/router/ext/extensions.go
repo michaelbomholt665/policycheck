@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"policycheck/internal/adapters/cliwrapper"
 	"policycheck/internal/adapters/config"
 	"policycheck/internal/adapters/scanners"
 	"policycheck/internal/adapters/walk"
@@ -18,6 +19,8 @@ var extensions = []router.Extension{
 	&config.Extension{},
 	&walk.Extension{},
 	&scanners.Extension{},
+
+	&cliwrapper.Extension{},
 }
 
 const (

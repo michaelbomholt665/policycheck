@@ -8,14 +8,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"time"
+
 	"policycheck/internal/policycheck/config"
 	"policycheck/internal/policycheck/core"
 	"policycheck/internal/policycheck/host"
 	"policycheck/internal/policycheck/types"
 	"policycheck/internal/router/capabilities"
 	"policycheck/internal/router/ext"
-	"sort"
-	"time"
 )
 
 // Run executes the policycheck CLI.

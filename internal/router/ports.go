@@ -20,9 +20,13 @@ const (
 	// PortCLIChrome is the router-native CLI text/layout capability port.
 	PortCLIChrome PortName = "cli-chrome"
 	// PortCLIInteraction is the router-native CLI interaction capability port.
-	PortCLIInteraction PortName = "cli-interaction"
-	PortConfig         PortName = "config"
-	PortWalk           PortName = "walk"
-	PortScanner        PortName = "scanner"
-	PortReadFile       PortName = "readfile"
+	PortCLIInteraction         PortName = "cli-interaction"
+	PortConfig                 PortName = "config"
+	PortWalk                   PortName = "walk"
+	PortScanner                PortName = "scanner"
+	PortReadFile               PortName = "readfile"
+	PortCLIWrapperDispatcher   PortName = "cli-wrapper-dispatcher"
+	PortCLIWrapperSecurityGate PortName = "cli-wrapper-security"
+	PortCLIWrapperMacroRunner  PortName = "cli-wrapper-macro"
+	PortCLIWrapperFormatter    PortName = "cli-wrapper-format"
 )
