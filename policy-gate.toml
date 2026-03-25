@@ -1,0 +1,168 @@
+# Default policy-gate configuration for policycheck.
+# Review this file after first creation and adjust paths/thresholds for the repository.
+
+[paths]
+production_roots = ["internal", "cmd"]
+secret_scan_roots = ["internal", "cmd"]
+test_scan_roots = ["cmd", "internal", "."]
+file_loc_roots = ["internal", "cmd", "test"]
+function_quality_roots = ["internal", "cmd"]
+allowed_test_prefixes = ["cmd/policycheck/", "internal/tests/"]
+loc_ignore_prefixes = ["cmd/policycheck/", "internal/tests/", "scripts/"]
+hardcoded_runtime_knob_scan_roots = ["internal"]
+hardcoded_runtime_knob_ignore_prefixes = [
+    "internal/pathing/",
+    "internal/bridge/cli/",
+]
+
+[file_size]
+warn_loc = 700
+max_loc = 900
+min_warn_loc = 450
+min_max_loc = 650
+min_warn_to_max_gap = 150
+warn_penalty_per_ctx_function = 10
+max_penalty_per_ctx_function = 15
+max_penalty_ctx_threshold = 12
+
+[function_quality]
+enabled_languages = ["go", "python", "typescript"]
+warn_loc = 80
+max_loc = 120
+go_warn_loc = 80
+go_max_loc = 120
+python_warn_loc = 100
+python_max_loc = 150
+typescript_warn_loc = 100
+typescript_max_loc = 160
+warn_parameter_count = 5
+max_parameter_count = 7
+mild_ctx_min = 10
+elevated_ctx_min = 12
+immediate_refactor_ctx_min = 14
+error_ctx_min = 15
+error_ctx_and_loc_ctx = 8
+error_ctx_and_loc_loc = 80
+nil_guard_repeat_warn_count = 8
+
+[symbol_hygiene]
+scan_roots = ["internal", "cmd"]
+exclude_prefixes = ["cmd/policycheck"]
+min_name_tokens = 3
+exempt_function_names = ["Close", "Consumes", "Error", "Provides", "Read", "Required", "String", "Unwrap", "Write", "main"]
+
+[output]
+mild_ctx_compress_summary = true
+mild_ctx_summary_min_functions = 2
+mild_ctx_per_file_escalation_count = 3
+mild_ctx_per_file_summary_min_count = 2
+
+[secret_logging]
+keywords = [
+    "dsn",
+    "token",
+    "apikey",
+    "passwd",
+    "api_key",
+    "password",
+    "connection string",
+    "connection_string",
+]
+ignore_path_prefixes = [
+    "internal/policycheck/core/security/secret_catalog.go",
+    "internal/adapters/scanners/policy_scanner.ts",
+    "internal/adapters/scanners/policy_scanner.cjs",
+    "internal/adapters/scanners/policy_scanner.js",
+    "internal/adapters/scanners/policy_scanner.py",
+    "cmd/policycheck/dist/policy_scanner.js"
+]
+allowed_literal_patterns = []
+
+[secret_logging.allowlist]
+literal_patterns = []
+pattern_ids = []
+
+[secret_logging.overrides]
+
+[cli_formatter]
+required_files = ["cmd/validate.go", "cmd/debug.go"]
+
+[hardcoded_runtime_knob]
+identifiers = [
+    "Port",
+    "Host",
+    "Timeout",
+    "MaxFile",
+    "MaxSize",
+    "CacheTTL",
+    "LogLevel",
+    "Concurrent",
+    "AllowRemote",
+    "TimeoutSeconds",
+]
+
+[architecture]
+enforce = true
+
+[[architecture.roots]]
+path = "internal"
+allowed_children = [
+    "db",
+    "app",
+    "docs",
+    "embed",
+    "tests",
+    "ports",
+    "router",
+    "config",
+    "output",
+    "manifest",
+    "adapters",
+    "contentutil",
+    "manifestinspect",
+    "policycheck",
+    "core",
+    "types",
+    "host",
+    "utils",
+    "cli",
+]
+ignore_children = []
+
+[[architecture.concerns]]
+name = "database"
+tags = ["database", "schema", "queries", "config"]
+roots = ["internal/db", "docs/database"]
+config_paths = ["internal/config"]
+schema_paths = ["internal/db/schema.go", "docs/database"]
+contract_paths = ["internal/manifest"]
+api_paths = ["internal/db"]
+
+[[architecture.concerns]]
+name = "router"
+tags = ["router", "ports", "wiring", "extensions"]
+roots = ["internal/router", "internal/ports", "docs/router"]
+config_paths = ["policy-gate.toml"]
+schema_paths = []
+contract_paths = [
+    "docs/router/router-final.md",
+    "docs/router/router-test-strategy.md",
+    "docs/router/router-tdd-tasklist.md",
+]
+api_paths = ["internal/router", "internal/tests/router"]
+
+[go_version]
+allowed_prefixes = ["1.24", "1.25"]
+
+[package_rules]
+scan_roots = ["cmd", "internal", "test"]
+max_production_files = 10
+min_concerns = 1
+max_concerns = 2
+
+[ai_compatibility]
+required_flags = ["--ai", "--user"]
+
+[scope_guard]
+enabled = false
+forbidden_calls = ["os.WriteFile", "os.Rename"]

@@ -1,0 +1,35 @@
+# files
+.env
+.env.local
+codebase_mapping.md
+guidance.md
+*.exe
+*.exe~
+*.exe*
+*.bin
+*.out
+tasklist.md
+tuning-notes.md
+
+# dist/*
+!dist/scanner.cjs
+node_modules/
+__pycache__/
+.venv/
+.mypy_cache/
+.qodo/
+.ruff_cache/
+
+# agents
+.agents
+.cursor
+.antigravity
+.codex
+.gemini
+.claude 
+
+# folders
+artifacts/
+docs/router/
+docs/standard/
+script/

@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/golangci/golangci-lint/v1.64.8/jsonschema/golangci.jsonschema.json
+
+run:
+  go: '1.24'
+  build-tags:
+    - test
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofumpt
+    - goimports
+    - misspell
+    - unconvert
+    - unparam
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+  govet:
+    # Note: check-shadowing was deprecated/moved in some versions. 
+    # If govet still complains, use 'enable-all: true' or specific analyzers.
+    enable:
+      - shadow 
+
+issues:
+  exclude-use-default: false
+  exclude-dirs:
+    - .backup
+    - .codex
+    - .agents
+    - .antigravity
+    - .gemini
+    - cmd/policycheck
+    - docs
+    - node_modules
+  exclude-files:
+    - ".*\\.gen\\.go$"

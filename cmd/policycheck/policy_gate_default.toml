@@ -1,0 +1,208 @@
+# Default policy-gate configuration for policycheck.
+# This file is used by cmd/policycheck as the default policy template.
+#
+# Purpose of this file:
+# - Provide sensible defaults so policycheck can run out-of-the-box.
+# - Mirror the structure and intent of the repository's active
+#   `policy-gate.toml`, while remaining safe to copy into new repositories.
+# - Serve as a human-editable template. Add comments or tune values to
+#   match your repository conventions and team preferences.
+#
+# Notes for humans and AI agents:
+# - Keep the TOML keys stable; tooling expects these names.
+# - The root `policy-gate.toml` is the active policy for this repository.
+#   This file explains the available settings and should stay aligned with it.
+# - You can add or remove paths, keywords and identifiers to reduce false positives.
+# - If you are automating edits (e.g. by an AI), prefer to add new keys under
+#   existing groups rather than changing the overall structure.
+
+#############################
+# Paths configuration
+#############################
+# Controls which directories are scanned for different checks.
+# Use relative paths from the repository root. You can add or remove
+# directories to widen or narrow the scanning surface.
+[paths]
+# Directories treated as production code roots (used by package/file policies).
+production_roots = ["internal", "cmd"]
+# Roots to scan for secret-like string literals in logging calls.
+secret_scan_roots = ["internal", "cmd"]
+# Roots to scan for *_test.go files when validating proper test placement.
+test_scan_roots = ["cmd", "internal", "."]
+# Roots to apply file-level LOC thresholds.
+file_loc_roots = ["internal", "cmd", "test"]
+# Roots to scan for function quality (complexity/LOC) across languages.
+function_quality_roots = ["internal", "cmd"]
+# Allowed path prefixes for test files (relative, slash-separated).
+# If a test file's relative path starts with any of these prefixes it will not be flagged.
+allowed_test_prefixes = ["cmd/policycheck/", "internal/tests/"]
+# Path prefixes to ignore when applying LOC policies (useful for tests, tools, or generated code).
+loc_ignore_prefixes = ["cmd/policycheck/", "internal/tests/", "scripts/"]
+# Roots to scan for potential hardcoded runtime knobs (timeouts, ports, sizes).
+hardcoded_runtime_knob_scan_roots = ["internal"]
+# Path prefixes to ignore when scanning for hardcoded runtime knobs.
+hardcoded_runtime_knob_ignore_prefixes = ["internal/pathing/", "internal/bridge/cli/"]
+
+#############################
+# File size (LOC) thresholds
+#############################
+# Controls when a file should trigger a warning or an error based on lines of code.
+# The thresholds are adjusted dynamically based on counts of CTX-heavy functions
+# (see function_quality configuration for CTX thresholds).
+[file_size]
+# Lines-of-code at which a warning is emitted (base value).
+warn_loc = 700
+# Lines-of-code at which a hard ERROR is emitted (base value).
+max_loc = 900
+# When files contain functions above the mild CTX threshold, warn_loc is reduced by
+# this amount per such function (incentivizes splitting files with many complex functions).
+warn_penalty_per_ctx_function = 10
+# When files contain functions above the MaxPenaltyCTXThreshold, max_loc is reduced by
+# this amount per such function.
+max_penalty_per_ctx_function = 15
+# CTX threshold above which a function contributes to max_loc penalties.
+max_penalty_ctx_threshold = 12
+# Minimum values for warn/max LOC to avoid ridiculous thresholds when penalties are large.
+min_warn_loc = 450
+min_max_loc = 650
+# Ensure there is always a gap between warn and max thresholds.
+min_warn_to_max_gap = 150
+
+#############################
+# Function quality (CTX/LOC) thresholds
+#############################
+# CTX is the tool's internal complexity metric. Use these values to tune when
+# functions should be considered for compression, elevated cleanup, or immediate refactor.
+[function_quality]
+# LOC threshold to emit a function-level WARNING.
+warn_loc = 80
+# LOC threshold to emit a function-level ERROR.
+max_loc = 120
+# CTX >= this value is considered a mild complexity warning (may be compressable).
+mild_ctx_min = 10
+# CTX >= this value is elevated and suggest review.
+elevated_ctx_min = 12
+# CTX >= this value suggests immediate refactor is recommended.
+immediate_refactor_ctx_min = 14
+# CTX >= this value results in an ERROR (immediate refactor required).
+error_ctx_min = 15
+# Combined CTX+LOC rule: if CTX >= error_ctx_and_loc_ctx and LOC >= error_ctx_and_loc_loc -> ERROR.
+error_ctx_and_loc_ctx = 8
+error_ctx_and_loc_loc = 80
+# If a function repeats simple nil-guard checks this many times, the repetition
+# will emit a separate advisory (can inflate CTX scores).
+nil_guard_repeat_warn_count = 8
+
+#############################
+# Symbol hygiene
+#############################
+# Controls function naming conventions for doc hygiene checks.
+[symbol_hygiene]
+# Minimum number of semantic tokens in function names, counted from CamelCase
+# or underscore-separated identifiers.
+min_function_name_tokens = 3
+# Standard-library interface methods that must stay single-token can be exempted here.
+exempt_function_names = ["Close", "Consumes", "Error", "Provides", "Read", "Required", "String", "Unwrap", "Write", "main"]
+
+#############################
+# Output configuration
+#############################
+# Controls summarization behavior for mild CTX warnings.
+[output]
+# If true, compress long long lists of mild CTX warnings into summaries.
+mild_ctx_compress_summary = true
+# Minimum number of mild functions required to trigger a compressed summary.
+mild_ctx_summary_min_functions = 2
+# Number of mild warnings in a file that will escalate to a per-file summary.
+mild_ctx_per_file_escalation_count = 3
+# Minimum number of mild per-file items required to include the per-file summary.
+mild_ctx_per_file_summary_min_count = 2
+
+#############################
+# Secret logging configuration
+#############################
+# This controls the keyword-based secret detection. The tool also includes built-in
+# regex patterns (embedded in the binary) for many common token formats (GitHub PATs,
+# API keys, OpenAI sk- keys, AWS-like keys, PEM headers, DB URIs, etc.).
+#
+# - keywords: simple substring matches (lowercased before checking). Useful for
+#   detecting labels like "password" or "api_key" in literal strings.
+# - Built-in regex patterns are applied automatically — edit the compiled list in
+#   cmd/policycheck/secret_patterns.go if you need to change defaults (or add
+#   configuration support to add patterns via TOML).
+[secret_logging]
+# Substring keywords that indicate potential secrets in literal strings.
+keywords = ["password", "passwd", "token", "api_key", "apikey", "dsn", "connection string", "connection_string"]
+# Skip secret-log scanning for matching repository-relative path prefixes.
+ignore_path_prefixes = []
+# Allow known-benign literals by regexp (applied before built-in or keyword matches).
+allowed_literal_patterns = []
+# Optional allowlist extensions for built-in pattern IDs and extra benign literal regexes.
+[secret_logging.allowlist]
+literal_patterns = []
+pattern_ids = []
+# Optional severity overrides for built-in pattern IDs.
+[secret_logging.overrides]
+
+#############################
+# CLI formatter expectations
+#############################
+# Files that implement CLI commands should use the audience-aware formatter
+# (GetFormatterFromContext) rather than raw fmt.Print* calls. These file paths
+# are checked by substring search; if your command handlers live in different
+# files, add them here.
+[cli_formatter]
+required_files = ["cmd/validate.go", "cmd/debug.go"]
+
+#############################
+# Hardcoded runtime knobs
+#############################
+# Heuristic identifiers that suggest a value should come from configuration
+# (TOML or environment) rather than being hardcoded in code. The scanner will
+# look for simple assignments or YAML/JSON-like literals that include these
+# identifiers and warn accordingly.
+[hardcoded_runtime_knob]
+identifiers = ["Timeout", "TimeoutSeconds", "MaxFile", "MaxSize", "Port", "Host", "AllowRemote", "Concurrent", "CacheTTL", "LogLevel"]
+
+#############################
+# Architecture policy configuration
+#############################
+# Enforce a top-level directory shape under configured roots. Each root lists
+# allowed child directories and optional ignore children. Use this to keep the
+# repository structure predictable and to constrain where certain code may live.
+[architecture]
+enforce = true
+
+# Define individual roots (repeat [[architecture.roots]] for multiple roots)
+[[architecture.roots]]
+path = "internal"
+# Allowed top-level children under the root. Any directory not in this list
+# (unless explicitly ignored) will be flagged.
+allowed_children = ["adapters", "app", "config", "contentutil", "db", "docs", "embed", "manifest", "manifestinspect", "output", "policycheck", "tests"]
+# Names of child directories that should be silently ignored if present.
+ignore_children = []
+
+# Architecture concerns group related files and paths for a cross-cutting concern
+# such as "database", "api", or "logging". Each concern helps the --concern
+# flag report relevant locations to humans and automation.
+[[architecture.concerns]]
+name = "database"
+tags = ["database", "schema", "queries", "config"]
+roots = ["internal/db", "docs/database"]
+config_paths = ["internal/config"]
+schema_paths = ["internal/db/schema.go", "docs/database"]
+contract_paths = ["internal/manifest"]
+api_paths = ["internal/db"]
+
+[[architecture.concerns]]
+name = "router"
+tags = ["router", "ports", "wiring", "extensions"]
+roots = ["internal/router", "internal/ports", "docs/router"]
+config_paths = ["policy-gate.toml"]
+schema_paths = []
+contract_paths = ["docs/router/router-final.md", "docs/router/router-test-strategy.md", "docs/router/router-tdd-tasklist.md"]
+api_paths = ["internal/router", "internal/tests/router"]
+
+# End of policy-gate default template.
+# If you customize this file, keep a copy in your repo (policy-gate.toml) so
+# teams and CI can run policycheck with consistent rules.

@@ -1,0 +1,80 @@
+// Package utils provides common helper functions used across policycheck.
+package utils
+
+import (
+	"go/ast"
+	"path"
+	"path/filepath"
+	"strings"
+)
+
+// NormalizePolicyPath normalizes a policy path for comparison.
+func NormalizePolicyPath(value string) string {
+	cleaned := path.Clean(filepath.ToSlash(value))
+	if cleaned == "." {
+		return ""
+	}
+
+	return strings.TrimPrefix(cleaned, "./")
+}
+
+// HasPrefix returns true if the string starts with any of the provided prefixes,
+// accounting for slash-delimited path boundaries.
+func HasPrefix(value string, prefixes []string) bool {
+	normalizedValue := NormalizePolicyPath(value)
+	for _, prefix := range prefixes {
+		normalizedPrefix := NormalizePolicyPath(prefix)
+		if normalizedPrefix == "" {
+			continue
+		}
+		if normalizedValue == normalizedPrefix || strings.HasPrefix(normalizedValue, normalizedPrefix+"/") {
+			return true
+		}
+	}
+
+	return false
+}
+
+// ToSlashRel returns the slash-normalised path of target relative to root.
+func ToSlashRel(root, target string) string {
+	rel, _ := filepath.Rel(root, target)
+	return filepath.ToSlash(rel)
+}
+
+// Pluralize returns the singular or plural form of a noun based on count.
+func Pluralize(noun string, count int) string {
+	if count == 1 {
+		return noun
+	}
+	return noun + "s"
+}
+
+// PluralizeVerb returns the singular or plural form of a verb based on count.
+func PluralizeVerb(singular string, count int) string {
+	if count == 1 {
+		return singular
+	}
+	return "have"
+}
+
+// IsGeneratedFile checks if a file contains standard "Code generated" headers.
+// It only checks the first 512 bytes for efficiency.
+func IsGeneratedFile(content []byte) bool {
+	header := string(content)
+	if len(header) > 512 {
+		header = header[:512]
+	}
+	return strings.Contains(header, "Code generated") && strings.Contains(header, "DO NOT EDIT")
+}
+
+// SelectorBaseName extracts the base name from an AST expression (Ident or Selector).
+func SelectorBaseName(expr ast.Expr) string {
+	switch value := expr.(type) {
+	case *ast.Ident:
+		return value.Name
+	case *ast.SelectorExpr:
+		return value.Sel.Name
+	default:
+		return ""
+	}
+}

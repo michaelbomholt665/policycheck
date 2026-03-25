@@ -1,0 +1,23 @@
+{
+  "gopls": {
+    "buildFlags": ["-tags=test"]
+  },
+  "go.testTags": "test",
+  "files.exclude": {
+    "**/.backup": true,
+    "**/.git": true,
+    "**/node_modules": true
+  },
+  "search.exclude": {
+    "**/.backup": true,
+    "**/.git": true,
+    "**/node_modules": true
+  },
+  "files.watcherExclude": {
+    "**/.backup/**": true,
+    "**/.git/**": true,
+    "**/node_modules/**": true
+  },
+  "files.eol": "\n",
+  "codium.codeCompletion.enable": false
+}

@@ -1,0 +1,17 @@
+* text=auto eol=lf
+*.go text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.py text eol=lf
+*.ts text eol=lf
+*.cjs text eol=lf
+*.ndjson text eol=lf
+*.tsv text eol=lf
+Makefile text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+.golangci.yaml text eol=lf
+LICENSE text eol=lf

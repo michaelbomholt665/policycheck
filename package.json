@@ -1,0 +1,21 @@
+{
+  "name": "policycheck",
+  "version": "1.0.0",
+  "description": "The ICE Symbolic Registry is a tool designed to continuously map and synchronize the semantic structure of your codebase into a durable, queryable format.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build:scanner": "tsc pkg/assets/scripts/scanner.ts --outDir pkg/assets/dist --module commonjs --target es2020 --declaration false --sourceMap false && tsc cmd/policycheck/policy_scanner.ts --outDir cmd/policycheck/dist --module commonjs --target es2020 --declaration false --sourceMap false && node -e \"const fs=require('node:fs'); fs.rmSync('pkg/assets/dist/scanner.cjs',{force:true}); fs.renameSync('pkg/assets/dist/scanner.js','pkg/assets/dist/scanner.cjs'); fs.rmSync('cmd/policycheck/dist/policy_scanner.cjs',{force:true}); fs.renameSync('cmd/policycheck/dist/policy_scanner.js','cmd/policycheck/dist/policy_scanner.cjs');\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.9.3"
+  }
+}
