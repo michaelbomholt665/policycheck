@@ -17,8 +17,12 @@ const (
 	PortOptional PortName = "optional"
 	// PortCLIStyle is the router-native CLI styling capability port.
 	PortCLIStyle PortName = "cli-style"
-	PortConfig   PortName = "config"
-	PortWalk     PortName = "walk"
-	PortScanner  PortName = "scanner"
-	PortReadFile PortName = "readfile"
+	// PortCLIChrome is the router-native CLI text/layout capability port.
+	PortCLIChrome PortName = "cli-chrome"
+	// PortCLIInteraction is the router-native CLI interaction capability port.
+	PortCLIInteraction PortName = "cli-interaction"
+	PortConfig         PortName = "config"
+	PortWalk           PortName = "walk"
+	PortScanner        PortName = "scanner"
+	PortReadFile       PortName = "readfile"
 )

@@ -81,19 +81,8 @@ func (w *complexityWalker) Visit(n ast.Node) ast.Visitor {
 
 	switch node := n.(type) {
 	case *ast.IfStmt:
-		if !w.isDiscountableErrCheck(node) && !w.isDiscountableNilGuard(node) {
-			w.complexity++
-		}
-		if node.Else != nil {
-			// else if is handled by the recursive walk (Visit will be called for the IfStmt in Else)
-			// but a plain else { ... } also adds complexity.
-			if _, ok := node.Else.(*ast.IfStmt); !ok {
-				w.complexity++
-			}
-		}
-	case *ast.ForStmt:
-		w.complexity++
-	case *ast.RangeStmt:
+		w.visitIfStmt(node)
+	case *ast.ForStmt, *ast.RangeStmt:
 		w.complexity++
 	case *ast.CaseClause:
 		// Increment for each case in a switch.
@@ -116,10 +105,39 @@ func (w *complexityWalker) Visit(n ast.Node) ast.Visitor {
 	return w
 }
 
+func (w *complexityWalker) visitIfStmt(node *ast.IfStmt) {
+	if !w.isDiscountableErrCheck(node) && !w.isDiscountableNilGuard(node) {
+		w.complexity++
+	}
+	if node.Else != nil {
+		// else if is handled by the recursive walk (Visit will be called for the IfStmt in Else)
+		// but a plain else { ... } also adds complexity.
+		if _, ok := node.Else.(*ast.IfStmt); !ok {
+			w.complexity++
+		}
+	}
+}
+
 // isDiscountableErrCheck returns true if the if statement is a plain
 // "if err != nil { return ... err ... }" guard with no nested logic or error swallowing.
 func (w *complexityWalker) isDiscountableErrCheck(n *ast.IfStmt) bool {
-	// Must be if err != nil
+	if !w.isBasicErrNilCheck(n) {
+		return false
+	}
+
+	if n.Else != nil || len(n.Body.List) == 0 || len(n.Body.List) > 3 {
+		return false
+	}
+
+	ret := findReturnStmtWithErr(n.Body.List)
+	if ret == nil {
+		return false
+	}
+
+	return w.checkBenignBody(n.Body, ret)
+}
+
+func (w *complexityWalker) isBasicErrNilCheck(n *ast.IfStmt) bool {
 	bin, ok := n.Cond.(*ast.BinaryExpr)
 	if !ok || bin.Op != token.NEQ {
 		return false
@@ -132,46 +150,22 @@ func (w *complexityWalker) isDiscountableErrCheck(n *ast.IfStmt) bool {
 	if !ok || yIdent.Name != "nil" {
 		return false
 	}
+	return true
+}
 
-	// No else branch allowed
-	if n.Else != nil {
-		return false
-	}
-
-	// Body must be up to 3 statements
-	if len(n.Body.List) == 0 || len(n.Body.List) > 3 {
-		return false
-	}
-
-	// Must find a return statement that returns err
+func findReturnStmtWithErr(stmts []ast.Stmt) *ast.ReturnStmt {
 	var ret *ast.ReturnStmt
-	for _, stmt := range n.Body.List {
+	for _, stmt := range stmts {
 		if r, ok := stmt.(*ast.ReturnStmt); ok {
 			ret = r
 			break
 		}
 	}
 
-	if ret == nil {
-		return false
+	if ret == nil || len(ret.Results) == 0 {
+		return nil
 	}
 
-	// Other statements must be benign (logging, metrics)
-	for _, stmt := range n.Body.List {
-		if stmt == ret {
-			continue
-		}
-		if !isBenignErrorCheckStmt(stmt) {
-			return false
-		}
-	}
-
-	// Return must not be empty.
-	if len(ret.Results) == 0 {
-		return false
-	}
-
-	// Check that the return still propagates the current err value.
 	returnsErr := false
 	ast.Inspect(ret, func(inner ast.Node) bool {
 		if ident, ok := inner.(*ast.Ident); ok && ident.Name == "err" {
@@ -181,26 +175,22 @@ func (w *complexityWalker) isDiscountableErrCheck(n *ast.IfStmt) bool {
 		return true
 	})
 
-	if !returnsErr {
-		return false
+	if returnsErr {
+		return ret
 	}
+	return nil
+}
 
-	// Body must contain no nested control flow.
-	hasNested := false
-	ast.Inspect(n.Body, func(inner ast.Node) bool {
-		if inner == nil || inner == n.Body {
-			return true
+func (w *complexityWalker) checkBenignBody(body *ast.BlockStmt, ret *ast.ReturnStmt) bool {
+	for _, stmt := range body.List {
+		if stmt == ret {
+			continue
 		}
-		switch inner.(type) {
-		case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt,
-			*ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt:
-			hasNested = true
+		if !isBenignErrorCheckStmt(stmt) {
 			return false
 		}
-		return true
-	})
-
-	return !hasNested
+	}
+	return !hasNestedControlFlow(body)
 }
 
 // isBenignErrorCheckStmt returns true for non-penalizing statements like logging or metrics.

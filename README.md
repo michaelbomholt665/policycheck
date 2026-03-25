@@ -79,8 +79,14 @@ Enforces directory structure under configured roots with allowed children.
 # Run the policy checker
 go run ./cmd/policycheck
 
-# List all enforced policies
+# List the active policy groups
 go run ./cmd/policycheck --policy-list
+
+# List the enforced rule catalog
+go run ./cmd/policycheck --list-rules
+
+# Browse the policy catalog interactively when supported
+go run ./cmd/policycheck --interactive
 
 # Print architecture concern locations
 go run ./cmd/policycheck --concern <name>
@@ -98,11 +104,23 @@ policycheck reads `policy-gate.toml` from the repository root. If missing, a def
 | --------------- | ------------------ | ------------------------------------------------ |
 | `--root`        | `.`                | Repository root to scan                          |
 | `--config`      | `policy-gate.toml` | Path to policy config TOML                       |
-| `--policy-list` | —                  | Print list of enforced policies                  |
+| `--policy-list` | —                  | Print list of active policy groups               |
+| `--list-rules`  | —                  | Print the enforced rule catalog with descriptions |
+| `--interactive` | —                  | Browse policy groups and rules through the router-native interaction capability |
 | `--concern`     | —                  | Print locations for a named architecture concern |
 | `--no-create`   | —                  | Fail if config is missing                        |
 | `--dry-run`     | —                  | Same as `--no-create`                            |
 | `--format`      | `text`             | Output format: `text`, `json`, `ndjson`          |
+
+## Router-Native CLI Capabilities
+
+policycheck now uses the split router-native CLI capability surface directly:
+
+- `ResolveCLIOutputStyler()` for structured table output
+- `ResolveCLIChromeStyler()` for semantic headings, panels, and violation gutters
+- `ResolveCLIInteractor()` for the optional interactive catalog flow
+
+If a CLI capability is unavailable, policycheck degrades to plain non-interactive output.
 
 ---
 

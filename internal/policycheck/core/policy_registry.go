@@ -24,6 +24,7 @@ var PolicyRegistry = map[string][]PolicyCheckFunc{
 		contracts.CheckCLIFormatter,
 		contracts.CheckAICompatibility,
 		contracts.CheckScopeGuard,
+		contracts.CheckHardcodedRuntimeKnobs,
 	},
 	"quality": {
 		quality.CheckFileSizePolicies,

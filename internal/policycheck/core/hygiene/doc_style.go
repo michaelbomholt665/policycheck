@@ -38,7 +38,7 @@ func CheckDocStyle(ctx context.Context, root string, cfg config.PolicyConfig) []
 	for _, scanRoot := range scanRoots {
 		absRoot := filepath.Join(root, scanRoot)
 		walk.WalkDirectoryTree(absRoot, func(path string, d fs.DirEntry, err error) error {
-			return collectDocViolations(ctx, root, path, d, err, cfg, &viols)
+			return collectDocViolations(root, path, d, err, cfg, &viols)
 		})
 	}
 
@@ -48,7 +48,6 @@ func CheckDocStyle(ctx context.Context, root string, cfg config.PolicyConfig) []
 // collectDocViolations is the per-entry walk callback. It filters irrelevant
 // entries before delegating to file-level checks.
 func collectDocViolations(
-	ctx context.Context,
 	root, path string,
 	d fs.DirEntry,
 	err error,
@@ -65,7 +64,7 @@ func collectDocViolations(
 	if isExcluded(rel, cfg.Hygiene.ExcludePrefixes) {
 		return nil
 	}
-	*viols = append(*viols, checkFileDocStyle(ctx, root, path)...)
+	*viols = append(*viols, checkFileDocStyle(root, path)...)
 	return nil
 }
 
@@ -86,7 +85,7 @@ func isSkippedFile(path string) bool {
 
 // checkFileDocStyle parses a single Go file and validates doc comments on all
 // exported symbols.
-func checkFileDocStyle(_ context.Context, root, path string) []types.Violation {
+func checkFileDocStyle(root, path string) []types.Violation {
 	content, err := host.ReadFile(path)
 	if err != nil {
 		return nil

@@ -23,9 +23,11 @@ func TestApplyPolicyConfigDefaults(t *testing.T) {
 	assert.Equal(t, []string{"internal", "cmd"}, cfg.Hygiene.ScanRoots)
 	assert.Equal(t, []string{"cmd/policycheck"}, cfg.Hygiene.ExcludePrefixes)
 	assert.Equal(t, 2, cfg.Hygiene.MinNameTokens)
+	assert.Equal(t, 3, cfg.Hygiene.CrossBackendMinNameTokens)
 
 	// Package Rules
 	assert.Equal(t, []string{"cmd", "internal", "test"}, cfg.PackageRules.ScanRoots)
+	assert.Empty(t, cfg.PackageRules.ExcludePrefixes)
 	assert.Equal(t, 10, cfg.PackageRules.MaxProductionFiles)
 	assert.Equal(t, 1, cfg.PackageRules.MinConcerns)
 	assert.Equal(t, 2, cfg.PackageRules.MaxConcerns)
@@ -46,5 +48,16 @@ func TestApplyPolicyConfigDefaults(t *testing.T) {
 	assert.Equal(t, []string{"--ai", "--user"}, cfg.AICompatibility.RequiredFlags)
 
 	// Scope Guard
-	assert.Equal(t, []string{"os.WriteFile", "os.Rename"}, cfg.ScopeGuard.ForbiddenCalls)
+	assert.Equal(t, config.ScopeGuardModeRestrict, cfg.ScopeGuard.Mode)
+	assert.Equal(t, []string{
+		"os.WriteFile",
+		"os.Rename",
+		"os.Remove",
+		"os.RemoveAll",
+		"os.Chmod",
+		"os.Chown",
+		"os.Mkdir",
+		"os.MkdirAll",
+	}, cfg.ScopeGuard.ForbiddenCalls)
+	assert.Empty(t, cfg.ScopeGuard.AllowedPathPrefixes)
 }

@@ -44,7 +44,7 @@ func CheckSymbolNames(ctx context.Context, root string, cfg config.PolicyConfig)
 	for _, scanRoot := range scanRoots {
 		absRoot := filepath.Join(root, scanRoot)
 		walk.WalkDirectoryTree(absRoot, func(path string, d fs.DirEntry, err error) error {
-			return collectSymbolViolations(ctx, root, path, d, err, cfg, &viols)
+			return collectSymbolViolations(root, path, d, err, cfg, &viols)
 		})
 	}
 
@@ -63,7 +63,6 @@ func resolveScanRoots(cfg config.PolicyConfig) []string {
 // collectSymbolViolations is the per-entry callback for the directory walk.
 // It filters non-Go files and excluded paths before delegating to file-level checks.
 func collectSymbolViolations(
-	ctx context.Context,
 	root, path string,
 	d fs.DirEntry,
 	err error,
@@ -77,7 +76,7 @@ func collectSymbolViolations(
 	if isExcluded(rel, cfg.Hygiene.ExcludePrefixes) {
 		return nil
 	}
-	*viols = append(*viols, checkFileSymbolNames(ctx, root, path, cfg)...)
+	*viols = append(*viols, checkFileSymbolNames(root, path, cfg)...)
 	return nil
 }
 
@@ -98,7 +97,7 @@ func isExcluded(rel string, prefixes []string) bool {
 }
 
 // checkFileSymbolNames parses a single Go file and validates all exported symbols.
-func checkFileSymbolNames(_ context.Context, root, path string, cfg config.PolicyConfig) []types.Violation {
+func checkFileSymbolNames(root, path string, cfg config.PolicyConfig) []types.Violation {
 	content, err := host.ReadFile(path)
 	if err != nil {
 		return nil
@@ -111,7 +110,7 @@ func checkFileSymbolNames(_ context.Context, root, path string, cfg config.Polic
 	}
 
 	rel := utils.ToSlashRel(root, path)
-	minTokens := resolveMinTokens(rel, cfg.Hygiene.MinNameTokens)
+	minTokens := resolveMinTokens(rel, cfg.Hygiene.MinNameTokens, cfg.Hygiene.CrossBackendMinNameTokens)
 
 	var viols []types.Violation
 	ast.Inspect(f, func(n ast.Node) bool {
@@ -124,9 +123,12 @@ func checkFileSymbolNames(_ context.Context, root, path string, cfg config.Polic
 // resolveMinTokens returns the effective minimum token count for a file.
 // Cross-backend surface files require 3 tokens; all others require the configured
 // minimum, defaulting to 2 when not set.
-func resolveMinTokens(rel string, configured int) int {
+func resolveMinTokens(rel string, configured int, crossBackendConfigured int) int {
 	for _, dir := range crossBackendDirs {
 		if strings.Contains(rel, dir) {
+			if crossBackendConfigured > 0 {
+				return crossBackendConfigured
+			}
 			return 3
 		}
 	}

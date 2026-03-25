@@ -1,4 +1,4 @@
-// Package ext Wires the concrete provider extensions into the router.
+// Package ext wires the concrete provider extensions into the router.
 //
 // Package Concerns:
 //   - Only package permitted to import both internal/router and internal/adapters.

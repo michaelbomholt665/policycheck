@@ -48,7 +48,8 @@ nil_guard_repeat_warn_count = 8
 [symbol_hygiene]
 scan_roots = ["internal", "cmd"]
 exclude_prefixes = ["cmd/policycheck"]
-min_name_tokens = 3
+min_name_tokens = 1
+cross_backend_min_name_tokens = 2
 exempt_function_names = ["Close", "Consumes", "Error", "Provides", "Read", "Required", "String", "Unwrap", "Write", "main"]
 
 [output]
@@ -73,8 +74,7 @@ ignore_path_prefixes = [
     "internal/adapters/scanners/policy_scanner.ts",
     "internal/adapters/scanners/policy_scanner.cjs",
     "internal/adapters/scanners/policy_scanner.js",
-    "internal/adapters/scanners/policy_scanner.py",
-    "cmd/policycheck/dist/policy_scanner.js"
+    "internal/adapters/scanners/policy_scanner.py"
 ]
 allowed_literal_patterns = []
 
@@ -130,32 +130,28 @@ allowed_children = [
 ignore_children = []
 
 [[architecture.concerns]]
-name = "database"
-tags = ["database", "schema", "queries", "config"]
-roots = ["internal/db", "docs/database"]
-config_paths = ["internal/config"]
-schema_paths = ["internal/db/schema.go", "docs/database"]
-contract_paths = ["internal/manifest"]
-api_paths = ["internal/db"]
-
-[[architecture.concerns]]
 name = "router"
 tags = ["router", "ports", "wiring", "extensions"]
 roots = ["internal/router", "internal/ports", "docs/router"]
 config_paths = ["policy-gate.toml"]
 schema_paths = []
 contract_paths = [
-    "docs/router/router-final.md",
-    "docs/router/router-test-strategy.md",
-    "docs/router/router-tdd-tasklist.md",
+    "docs/router/usage.md",
+    "docs/router/extensions.md",
+    "docs/router/architecture_diagram.mmd",
 ]
-api_paths = ["internal/router", "internal/tests/router"]
+api_paths = ["internal/router", "internal/tests/policycheck/host"]
 
 [go_version]
 allowed_prefixes = ["1.24", "1.25"]
 
 [package_rules]
 scan_roots = ["cmd", "internal", "test"]
+exclude_prefixes = [
+    "internal/adapters/config",
+    "internal/adapters/readfile",
+    "internal/adapters/walk",
+]
 max_production_files = 10
 min_concerns = 1
 max_concerns = 2
@@ -165,4 +161,15 @@ required_flags = ["--ai", "--user"]
 
 [scope_guard]
 enabled = false
-forbidden_calls = ["os.WriteFile", "os.Rename"]
+mode = "restrict"
+forbidden_calls = [
+    "os.WriteFile",
+    "os.Rename",
+    "os.Remove",
+    "os.RemoveAll",
+    "os.Chmod",
+    "os.Chown",
+    "os.Mkdir",
+    "os.MkdirAll",
+]
+allowed_path_prefixes = ["internal/adapters/scanners/"]

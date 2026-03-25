@@ -11,6 +11,14 @@ var declaredCapabilities = []CapabilityManifestEntry{
 		Port:     PortCLIStyle,
 		Resolver: "capabilities.ResolveCLIOutputStyler",
 	},
+	{
+		Port:     PortCLIChrome,
+		Resolver: "capabilities.ResolveCLIChromeStyler",
+	},
+	{
+		Port:     PortCLIInteraction,
+		Resolver: "capabilities.ResolveCLIInteractor",
+	},
 }
 
 // RouterDeclaredCapabilities returns the declared router-native capability manifest.

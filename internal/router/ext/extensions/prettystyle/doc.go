@@ -1,8 +1,9 @@
-// Package prettystyle Is a router capability extension that registers an optional
-// CLI styling provider for router consumers.
+// Package prettystyle is a router capability extension that registers an optional
+// CLI output provider for router consumers.
 //
 // Usage:
-//   - Depend on this extension when callers want styled CLI text or table output.
+//   - Depend on this extension when callers want styled CLI text, tables, or
+//     simple semantic layouts.
 //   - Resolve router.PortCLIStyle through internal/router/capabilities.
 //
 // Package Concerns:

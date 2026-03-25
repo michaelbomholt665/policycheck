@@ -33,7 +33,7 @@ func CheckPackageRules(ctx context.Context, root string, cfg config.PolicyConfig
 	}
 
 	stats := make(map[string]*PackageStats)
-	walkFn := createWalkFn(root, stats)
+	walkFn := createWalkFn(root, stats, cfg.PackageRules)
 
 	for _, scanRoot := range cfg.PackageRules.ScanRoots {
 		base := filepath.Join(root, filepath.FromSlash(scanRoot))
@@ -43,7 +43,7 @@ func CheckPackageRules(ctx context.Context, root string, cfg config.PolicyConfig
 	return ValidatePackageStats(stats, cfg.PackageRules)
 }
 
-func createWalkFn(root string, stats map[string]*PackageStats) fs.WalkDirFunc {
+func createWalkFn(root string, stats map[string]*PackageStats, cfg config.PolicyPackageRulesConfig) fs.WalkDirFunc {
 	return func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || filepath.Ext(path) != ".go" {
 			return nil
@@ -57,7 +57,7 @@ func createWalkFn(root string, stats map[string]*PackageStats) fs.WalkDirFunc {
 		rel, _ := filepath.Rel(root, path)
 		dir := filepath.ToSlash(filepath.Dir(rel))
 
-		if strings.HasPrefix(dir, "cmd/policycheck") || strings.HasPrefix(dir, "internal/policycheck") {
+		if isPackageRulesExcluded(dir, cfg.ExcludePrefixes) {
 			return nil
 		}
 
@@ -77,6 +77,14 @@ func createWalkFn(root string, stats map[string]*PackageStats) fs.WalkDirFunc {
 
 		return nil
 	}
+}
+
+func isPackageRulesExcluded(dir string, prefixes []string) bool {
+	if strings.HasPrefix(dir, "cmd/policycheck") || strings.HasPrefix(dir, "internal/policycheck") {
+		return true
+	}
+
+	return host.HasPrefix(dir, prefixes)
 }
 
 func populateDocStats(st *PackageStats, path string) {

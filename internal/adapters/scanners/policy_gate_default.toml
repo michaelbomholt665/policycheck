@@ -19,6 +19,7 @@
 #############################
 # Paths configuration
 #############################
+
 # Controls which directories are scanned for different checks.
 # Use relative paths from the repository root. You can add or remove
 # directories to widen or narrow the scanning surface.
@@ -41,11 +42,15 @@ loc_ignore_prefixes = ["cmd/policycheck/", "internal/tests/", "scripts/"]
 # Roots to scan for potential hardcoded runtime knobs (timeouts, ports, sizes).
 hardcoded_runtime_knob_scan_roots = ["internal"]
 # Path prefixes to ignore when scanning for hardcoded runtime knobs.
-hardcoded_runtime_knob_ignore_prefixes = ["internal/pathing/", "internal/bridge/cli/"]
+hardcoded_runtime_knob_ignore_prefixes = [
+    "internal/pathing/",
+    "internal/bridge/cli/",
+]
 
 #############################
 # File size (LOC) thresholds
 #############################
+
 # Controls when a file should trigger a warning or an error based on lines of code.
 # The thresholds are adjusted dynamically based on counts of CTX-heavy functions
 # (see function_quality configuration for CTX thresholds).
@@ -71,6 +76,7 @@ min_warn_to_max_gap = 150
 #############################
 # Function quality (CTX/LOC) thresholds
 #############################
+
 # CTX is the tool's internal complexity metric. Use these values to tune when
 # functions should be considered for compression, elevated cleanup, or immediate refactor.
 [function_quality]
@@ -96,17 +102,34 @@ nil_guard_repeat_warn_count = 8
 #############################
 # Symbol hygiene
 #############################
+
 # Controls function naming conventions for doc hygiene checks.
 [symbol_hygiene]
 # Minimum number of semantic tokens in function names, counted from CamelCase
 # or underscore-separated identifiers.
-min_function_name_tokens = 3
+min_name_tokens = 3
+# Minimum token count for cross-backend surfaces such as ports, types, and contracts.
+# Repositories with smaller infrastructure layers may prefer 2 here, while larger
+# multi-backend systems often benefit from keeping this at 3.
+cross_backend_min_name_tokens = 3
 # Standard-library interface methods that must stay single-token can be exempted here.
-exempt_function_names = ["Close", "Consumes", "Error", "Provides", "Read", "Required", "String", "Unwrap", "Write", "main"]
+exempt_function_names = [
+    "Close",
+    "Consumes",
+    "Error",
+    "Provides",
+    "Read",
+    "Required",
+    "String",
+    "Unwrap",
+    "Write",
+    "main",
+]
 
 #############################
 # Output configuration
 #############################
+
 # Controls summarization behavior for mild CTX warnings.
 [output]
 # If true, compress long long lists of mild CTX warnings into summaries.
@@ -121,6 +144,7 @@ mild_ctx_per_file_summary_min_count = 2
 #############################
 # Secret logging configuration
 #############################
+
 # This controls the keyword-based secret detection. The tool also includes built-in
 # regex patterns (embedded in the binary) for many common token formats (GitHub PATs,
 # API keys, OpenAI sk- keys, AWS-like keys, PEM headers, DB URIs, etc.).
@@ -132,7 +156,16 @@ mild_ctx_per_file_summary_min_count = 2
 #   configuration support to add patterns via TOML).
 [secret_logging]
 # Substring keywords that indicate potential secrets in literal strings.
-keywords = ["password", "passwd", "token", "api_key", "apikey", "dsn", "connection string", "connection_string"]
+keywords = [
+    "password",
+    "passwd",
+    "token",
+    "api_key",
+    "apikey",
+    "dsn",
+    "connection string",
+    "connection_string",
+]
 # Skip secret-log scanning for matching repository-relative path prefixes.
 ignore_path_prefixes = []
 # Allow known-benign literals by regexp (applied before built-in or keyword matches).
@@ -147,6 +180,7 @@ pattern_ids = []
 #############################
 # CLI formatter expectations
 #############################
+
 # Files that implement CLI commands should use the audience-aware formatter
 # (GetFormatterFromContext) rather than raw fmt.Print* calls. These file paths
 # are checked by substring search; if your command handlers live in different
@@ -157,16 +191,29 @@ required_files = ["cmd/validate.go", "cmd/debug.go"]
 #############################
 # Hardcoded runtime knobs
 #############################
+
 # Heuristic identifiers that suggest a value should come from configuration
 # (TOML or environment) rather than being hardcoded in code. The scanner will
 # look for simple assignments or YAML/JSON-like literals that include these
 # identifiers and warn accordingly.
 [hardcoded_runtime_knob]
-identifiers = ["Timeout", "TimeoutSeconds", "MaxFile", "MaxSize", "Port", "Host", "AllowRemote", "Concurrent", "CacheTTL", "LogLevel"]
+identifiers = [
+    "Timeout",
+    "TimeoutSeconds",
+    "MaxFile",
+    "MaxSize",
+    "Port",
+    "Host",
+    "AllowRemote",
+    "Concurrent",
+    "CacheTTL",
+    "LogLevel",
+]
 
 #############################
 # Architecture policy configuration
 #############################
+
 # Enforce a top-level directory shape under configured roots. Each root lists
 # allowed child directories and optional ignore children. Use this to keep the
 # repository structure predictable and to constrain where certain code may live.
@@ -178,7 +225,20 @@ enforce = true
 path = "internal"
 # Allowed top-level children under the root. Any directory not in this list
 # (unless explicitly ignored) will be flagged.
-allowed_children = ["adapters", "app", "config", "contentutil", "db", "docs", "embed", "manifest", "manifestinspect", "output", "policycheck", "tests"]
+allowed_children = [
+    "adapters",
+    "app",
+    "config",
+    "contentutil",
+    "db",
+    "docs",
+    "embed",
+    "manifest",
+    "manifestinspect",
+    "output",
+    "policycheck",
+    "tests",
+]
 # Names of child directories that should be silently ignored if present.
 ignore_children = []
 
@@ -200,8 +260,82 @@ tags = ["router", "ports", "wiring", "extensions"]
 roots = ["internal/router", "internal/ports", "docs/router"]
 config_paths = ["policy-gate.toml"]
 schema_paths = []
-contract_paths = ["docs/router/router-final.md", "docs/router/router-test-strategy.md", "docs/router/router-tdd-tasklist.md"]
+contract_paths = [
+    "docs/router/router-final.md",
+    "docs/router/router-test-strategy.md",
+    "docs/router/router-tdd-tasklist.md",
+]
 api_paths = ["internal/router", "internal/tests/router"]
+
+#############################
+# Go version policy
+#############################
+
+# Allowed Go version prefixes for the module's `go` and `toolchain`
+# directives in go.mod. Keep these aligned with the versions your team
+# supports in CI and local development.
+[go_version]
+allowed_prefixes = ["1.24", "1.25"]
+
+#############################
+# Package structure rules
+#############################
+
+# Lightweight structural checks for production packages. These help keep
+# packages small enough to reason about and ensure doc.go coverage is present.
+[package_rules]
+scan_roots = ["cmd", "internal", "test"]
+# Repository-relative package prefixes to skip for package structure checks.
+# Useful for tiny infrastructure packages that intentionally contain a single adapter file.
+exclude_prefixes = []
+max_production_files = 10
+min_concerns = 1
+max_concerns = 2
+
+#############################
+# AI compatibility markers
+#############################
+
+# Required CLI flags for commands intended to be safe for AI/automation flows.
+# Add or remove flags to match your command-surface conventions.
+[ai_compatibility]
+required_flags = ["--ai", "--user"]
+
+#############################
+# Scope guard
+#############################
+
+# Restricts direct filesystem lifecycle primitives in regular application code.
+# This is intended to catch raw mutation calls and push them toward reviewed,
+# explicit infrastructure seams.
+#
+# mode:
+# - "allow": disable the rule entirely
+# - "restrict": allow listed calls only under allowed_path_prefixes
+# - "ban": disallow listed calls everywhere in scanned files
+#
+# allowed_path_prefixes:
+# - Must be repository-relative
+# - Must not be absolute paths
+# - Must not escape the repository with `..`
+# - Use slash-separated paths
+#
+# For Go files, policycheck uses semantic matching on actual call expressions,
+# so comments and string literals like "os.WriteFile" do not trigger findings.
+[scope_guard]
+enabled = false
+mode = "restrict"
+forbidden_calls = [
+    "os.WriteFile",
+    "os.Rename",
+    "os.Remove",
+    "os.RemoveAll",
+    "os.Chmod",
+    "os.Chown",
+    "os.Mkdir",
+    "os.MkdirAll",
+]
+allowed_path_prefixes = []
 
 # End of policy-gate default template.
 # If you customize this file, keep a copy in your repo (policy-gate.toml) so

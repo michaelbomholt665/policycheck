@@ -13,7 +13,7 @@ type Extension struct{}
 // Required returns true - readfile capability is mandatory.
 func (e *Extension) Required() bool { return true }
 
-// Consumes returns nil.
+// Consumes reports that this extension has no dependencies.
 func (e *Extension) Consumes() []router.PortName { return nil }
 
 // Provides returns the ports this extension registers.

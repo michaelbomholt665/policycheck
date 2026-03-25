@@ -27,6 +27,7 @@ func CheckArchitecture(ctx context.Context, root string, cfg config.PolicyConfig
 		violations = append(violations, checkArchitectureRoot(root, rule)...)
 	}
 
+	violations = append(violations, checkArchitectureConcerns(root, cfg.Architecture.Concerns)...)
 	violations = append(violations, checkImportDirectionality(root)...)
 
 	return violations
@@ -46,43 +47,44 @@ func checkImportDirectionality(root string) []types.Violation {
 			return nil
 		}
 
-		content, err := host.ReadFile(path)
-		if err != nil {
-			return nil
-		}
-
-		fset := token.NewFileSet()
-		f, err := parser.ParseFile(fset, path, string(content), parser.ImportsOnly)
-		if err != nil {
-			return nil
-		}
-
 		rel, _ := filepath.Rel(root, path)
-
-		for _, imp := range f.Imports {
-			if imp.Path != nil {
-				importPath := strings.Trim(imp.Path.Value, `"`)
-				// Simple check to ensure we aren't importing anything under 'cmd/' in the same module.
-				// This assumes module imports look like "module-name/cmd/..." or relative imports.
-				// Given we're inside policycheck: "policycheck/cmd/..."
-				if strings.Contains(importPath, "/cmd/") || strings.HasPrefix(importPath, "cmd/") {
-					// Make sure it's actually the local cmd directory. We will just ban any import with /cmd/ if it shares the prefix of this module, but since we don't have the module name easily, any import containing "/cmd/" or "cmd/" is suspicious, but let's be more precise.
-					// Let's assume all internal module imports start with the module name or similar.
-					// For a simple generic rule: packages in internal/ shouldn't import from cmd/ at all, so we check if it contains the project's cmd path.
-					// If importPath contains "cmd/", we'll flag it.
-					violations = append(violations, types.Violation{
-						RuleID:   "structure.architecture",
-						File:     filepath.ToSlash(rel),
-						Line:     fset.Position(imp.Pos()).Line,
-						Message:  fmt.Sprintf("package inside internal/ imports %q, which is inside cmd/", importPath),
-						Severity: "error",
-					})
-				}
-			}
+		if viols := checkFileImportDirectionality(path, rel); viols != nil {
+			violations = append(violations, viols...)
 		}
 		return nil
 	})
 
+	return violations
+}
+
+func checkFileImportDirectionality(path, rel string) []types.Violation {
+	content, err := host.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, path, string(content), parser.ImportsOnly)
+	if err != nil {
+		return nil
+	}
+
+	var violations []types.Violation
+	for _, imp := range f.Imports {
+		if imp.Path == nil {
+			continue
+		}
+		importPath := strings.Trim(imp.Path.Value, `"`)
+		if strings.Contains(importPath, "/cmd/") || strings.HasPrefix(importPath, "cmd/") {
+			violations = append(violations, types.Violation{
+				RuleID:   "structure.architecture",
+				File:     filepath.ToSlash(rel),
+				Line:     fset.Position(imp.Pos()).Line,
+				Message:  fmt.Sprintf("package inside internal/ imports %q, which is inside cmd/", importPath),
+				Severity: "error",
+			})
+		}
+	}
 	return violations
 }
 
@@ -96,8 +98,14 @@ func checkArchitectureRoot(root string, rule config.PolicyArchitectureRoot) []ty
 	allowed := BuildNameSet(rule.AllowedChildren)
 	ignored := BuildNameSet(rule.IgnoreChildren)
 	violations := []types.Violation{}
+	entryRule := architectureEntryRule{
+		rulePath:    rule.Path,
+		allowed:     allowed,
+		ignored:     ignored,
+		allowedList: rule.AllowedChildren,
+	}
 	for _, entry := range entries {
-		if viol, ok := ValidateArchitectureEntry(rule.Path, entry.Name(), entry.IsDir(), allowed, ignored, rule.AllowedChildren); ok {
+		if viol, ok := validateArchitectureEntry(entryRule, entry.Name(), entry.IsDir()); ok {
 			violations = append(violations, viol)
 		}
 	}
@@ -127,6 +135,13 @@ func BuildNameSet(names []string) map[string]struct{} {
 	return items
 }
 
+type architectureEntryRule struct {
+	rulePath    string
+	allowed     map[string]struct{}
+	ignored     map[string]struct{}
+	allowedList []string
+}
+
 // ValidateArchitectureEntry validates a single top-level directory entry against a root rule.
 func ValidateArchitectureEntry(
 	rulePath, name string,
@@ -135,21 +150,97 @@ func ValidateArchitectureEntry(
 	ignored map[string]struct{},
 	allowedList []string,
 ) (types.Violation, bool) {
+	return validateArchitectureEntry(architectureEntryRule{
+		rulePath:    rulePath,
+		allowed:     allowed,
+		ignored:     ignored,
+		allowedList: allowedList,
+	}, name, isDir)
+}
+
+func validateArchitectureEntry(rule architectureEntryRule, name string, isDir bool) (types.Violation, bool) {
 	if !isDir {
 		return types.Violation{}, false
 	}
 
-	if _, ok := ignored[name]; ok {
+	if _, ok := rule.ignored[name]; ok {
 		return types.Violation{}, false
 	}
-	if _, ok := allowed[name]; ok {
+	if _, ok := rule.allowed[name]; ok {
 		return types.Violation{}, false
 	}
 
 	return types.Violation{
 		RuleID:   "structure.architecture",
-		File:     filepath.ToSlash(filepath.Join(rulePath, name)),
-		Message:  fmt.Sprintf("top-level directory is not allowed under %s; allowed children: %s", filepath.ToSlash(rulePath), strings.Join(allowedList, ", ")),
+		File:     filepath.ToSlash(filepath.Join(rule.rulePath, name)),
+		Message:  fmt.Sprintf("top-level directory is not allowed under %s; allowed children: %s", filepath.ToSlash(rule.rulePath), strings.Join(rule.allowedList, ", ")),
 		Severity: "error",
 	}, true
+}
+
+func checkArchitectureConcerns(root string, concerns []config.PolicyArchitectureTopic) []types.Violation {
+	var violations []types.Violation
+
+	for _, concern := range concerns {
+		violations = append(violations, validateArchitectureConcern(root, concern)...)
+	}
+
+	return violations
+}
+
+func validateArchitectureConcern(root string, concern config.PolicyArchitectureTopic) []types.Violation {
+	var violations []types.Violation
+
+	if strings.TrimSpace(concern.Name) == "" {
+		violations = append(violations, types.Violation{
+			RuleID:   "structure.architecture",
+			File:     "policy-gate.toml",
+			Message:  "architecture concern is missing a name",
+			Severity: "error",
+		})
+	}
+
+	if len(concern.Tags) == 0 {
+		violations = append(violations, types.Violation{
+			RuleID:   "structure.architecture",
+			File:     "policy-gate.toml",
+			Message:  fmt.Sprintf("architecture concern %q must declare at least one tag", concern.Name),
+			Severity: "error",
+		})
+	}
+
+	violations = append(violations, validateConcernPaths(root, concern.Name, "roots", concern.Roots)...)
+	violations = append(violations, validateConcernPaths(root, concern.Name, "config_paths", concern.ConfigPaths)...)
+	violations = append(violations, validateConcernPaths(root, concern.Name, "schema_paths", concern.SchemaPaths)...)
+	violations = append(violations, validateConcernPaths(root, concern.Name, "contract_paths", concern.ContractPaths)...)
+	violations = append(violations, validateConcernPaths(root, concern.Name, "api_paths", concern.APIPaths)...)
+
+	return violations
+}
+
+func validateConcernPaths(root, concernName, fieldName string, paths []string) []types.Violation {
+	var violations []types.Violation
+
+	for _, relPath := range paths {
+		absPath := filepath.Join(root, filepath.FromSlash(relPath))
+		if _, err := os.Stat(absPath); err == nil {
+			continue
+		} else if os.IsNotExist(err) {
+			violations = append(violations, types.Violation{
+				RuleID:   "structure.architecture",
+				File:     filepath.ToSlash(relPath),
+				Message:  fmt.Sprintf("architecture concern %q references missing %s entry %q", concernName, fieldName, relPath),
+				Severity: "error",
+			})
+		} else {
+			violations = append(violations, types.Violation{
+				RuleID:   "structure.architecture",
+				File:     filepath.ToSlash(relPath),
+				Message:  fmt.Sprintf("architecture concern %q could not read %s entry %q: %v", concernName, fieldName, relPath, err),
+				Severity: "error",
+			})
+		}
+	}
+
+	return violations
 }

@@ -7,7 +7,7 @@
     "doc": "docs"
   },
   "scripts": {
-    "build:scanner": "tsc pkg/assets/scripts/scanner.ts --outDir pkg/assets/dist --module commonjs --target es2020 --declaration false --sourceMap false && tsc cmd/policycheck/policy_scanner.ts --outDir cmd/policycheck/dist --module commonjs --target es2020 --declaration false --sourceMap false && node -e \"const fs=require('node:fs'); fs.rmSync('pkg/assets/dist/scanner.cjs',{force:true}); fs.renameSync('pkg/assets/dist/scanner.js','pkg/assets/dist/scanner.cjs'); fs.rmSync('cmd/policycheck/dist/policy_scanner.cjs',{force:true}); fs.renameSync('cmd/policycheck/dist/policy_scanner.js','cmd/policycheck/dist/policy_scanner.cjs');\"",
+    "build:scanner": "tsc internal/adapters/scanners/policy_scanner.ts --outDir internal/adapters/scanners --module commonjs --target es2020 --declaration false --sourceMap false --types node && node -e \"const fs=require('node:fs'); fs.rmSync('internal/adapters/scanners/policy_scanner.cjs',{force:true}); fs.renameSync('internal/adapters/scanners/policy_scanner.js','internal/adapters/scanners/policy_scanner.cjs');\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

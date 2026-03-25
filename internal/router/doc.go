@@ -1,6 +1,5 @@
 // Package router Provides the zero-dependency port registry and extension boot machinery.
 //
-//
 // Package Concerns:
 // - This package must never import any internal package; ext handles all adapter wiring.
 // - Callers boot via ext.RouterBootExtensions and resolve via RouterResolveProvider.
@@ -9,7 +8,7 @@
 //
 // ### 1. THE GOLDEN RULE: ARCHITECTURAL BLINDNESS
 // The Router CORE (extension.go, registry.go, error_surface.go) is a FROZEN KERNEL.
-// - DO NOT: Add imports to any package inside internal// to the core.
+// - DO NOT: Add imports to any package inside internal/* to the core.
 // - DO NOT: Add business logic, domain types, or utility functions to the core.
 // - DO NOT: Attempt to bypass RouterResolveProvider by using global variables or init() functions.
 //

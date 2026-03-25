@@ -8,6 +8,13 @@ import (
 	"strings"
 )
 
+var irregularPluralVerbs = map[string]string{
+	"does": "do",
+	"has":  "have",
+	"is":   "are",
+	"was":  "were",
+}
+
 // NormalizePolicyPath normalizes a policy path for comparison.
 func NormalizePolicyPath(value string) string {
 	cleaned := path.Clean(filepath.ToSlash(value))
@@ -35,10 +42,18 @@ func HasPrefix(value string, prefixes []string) bool {
 	return false
 }
 
-// ToSlashRel returns the slash-normalised path of target relative to root.
+// ToSlashRel returns the slash-normalized path of target relative to root.
 func ToSlashRel(root, target string) string {
-	rel, _ := filepath.Rel(root, target)
-	return filepath.ToSlash(rel)
+	if !filepath.IsAbs(target) {
+		return NormalizePolicyPath(target)
+	}
+
+	rel, err := filepath.Rel(root, target)
+	if err != nil {
+		return NormalizePolicyPath(target)
+	}
+
+	return NormalizePolicyPath(rel)
 }
 
 // Pluralize returns the singular or plural form of a noun based on count.
@@ -54,7 +69,20 @@ func PluralizeVerb(singular string, count int) string {
 	if count == 1 {
 		return singular
 	}
-	return "have"
+
+	if plural, ok := irregularPluralVerbs[singular]; ok {
+		return plural
+	}
+
+	if strings.HasSuffix(singular, "es") {
+		return strings.TrimSuffix(singular, "es")
+	}
+
+	if strings.HasSuffix(singular, "s") {
+		return strings.TrimSuffix(singular, "s")
+	}
+
+	return singular
 }
 
 // IsGeneratedFile checks if a file contains standard "Code generated" headers.

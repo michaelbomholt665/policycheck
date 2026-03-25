@@ -180,3 +180,32 @@ func TestCheckPackageRulesIntegration(t *testing.T) {
 	// pkg2: missing doc.go -> error
 	assert.Len(t, violations, 3)
 }
+
+func TestCheckPackageRulesExcludePrefixes(t *testing.T) {
+	router.RouterResetForTest()
+	exts := []router.Extension{
+		walk.ExtensionInstance(),
+	}
+	_, err := router.RouterLoadExtensions(nil, exts, context.Background())
+	require.NoError(t, err)
+	defer router.RouterResetForTest()
+
+	tmp := t.TempDir()
+	pkg := filepath.Join(tmp, "internal", "adapters", "config")
+	require.NoError(t, os.MkdirAll(pkg, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(pkg, "doc.go"), []byte("// Package config Is a test\n//\n// Package Concerns:\n// - Concern 1\npackage config"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(pkg, "extension.go"), []byte("package config"), 0o644))
+
+	cfg := config.PolicyConfig{
+		PackageRules: config.PolicyPackageRulesConfig{
+			ScanRoots:          []string{"internal"},
+			ExcludePrefixes:    []string{"internal/adapters/config"},
+			MaxProductionFiles: 10,
+			MinConcerns:        1,
+			MaxConcerns:        2,
+		},
+	}
+
+	violations := structure.CheckPackageRules(context.Background(), tmp, cfg)
+	assert.Empty(t, violations)
+}

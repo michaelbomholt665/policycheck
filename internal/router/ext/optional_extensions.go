@@ -23,6 +23,7 @@ package ext
 
 import (
 	"policycheck/internal/router"
+	"policycheck/internal/router/ext/extensions/charmcli"
 	"policycheck/internal/router/ext/extensions/prettystyle"
 )
 
@@ -32,4 +33,5 @@ import (
 // if they fail to load.
 var optionalExtensions = []router.Extension{
 	&prettystyle.Extension{},
+	&charmcli.Extension{},
 }

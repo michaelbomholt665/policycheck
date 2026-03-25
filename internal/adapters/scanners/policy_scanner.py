@@ -39,13 +39,8 @@ class PolicyVisitor(ast.NodeVisitor):
         Calculates quality metrics for a function and prints the fact as JSON.
         """
         end_line = getattr(node, "end_lineno", node.lineno)
-        loc = max(1, end_line - node.lineno + 1)
-        param_count = len(node.args.args)
-        if node.args.vararg:
-            param_count += 1
-        if node.args.kwarg:
-            param_count += 1
-        
+        param_count = count_parameters(node)
+
         fact = {
             "kind": FACT_KIND,
             "language": "python",
@@ -163,6 +158,19 @@ def calculate_complexity(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
     for statement in node.body:
         visitor.visit(statement)
     return visitor.complexity
+
+
+def count_parameters(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
+    """
+    Counts positional-only, positional, keyword-only, and variadic parameters.
+    """
+    param_count = len(node.args.posonlyargs) + len(node.args.args) + len(node.args.kwonlyargs)
+    if node.args.vararg:
+        param_count += 1
+    if node.args.kwarg:
+        param_count += 1
+
+    return param_count
 
 
 def process_file(args_file: str, args_root: str) -> None:

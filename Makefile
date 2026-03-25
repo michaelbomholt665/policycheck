@@ -10,8 +10,8 @@ build-scanner:
 
 lint:
 	golangci-lint run
-	ruff check cmd/policycheck/policy_scanner.py
-	npx tsc --noEmit cmd/policycheck/policy_scanner.ts
+	ruff check internal/adapters/scanners/policy_scanner.py
+	npx tsc --noEmit internal/adapters/scanners/policy_scanner.ts
 
 clean:
 	rm -f policycheck

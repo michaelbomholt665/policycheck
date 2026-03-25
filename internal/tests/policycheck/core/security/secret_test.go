@@ -81,6 +81,21 @@ func TestFilterAllowlistedSecretFindings(t *testing.T) {
 	assert.Equal(t, "something_else", filtered[1].RuleID)
 }
 
+func TestValidatePolicyConfig_CompilesAllowlistLiteralPatterns(t *testing.T) {
+	cfg := config.PolicyConfig{}
+	config.ApplyPolicyConfigDefaults(&cfg)
+	cfg.FileSize.MinWarnLOC = 450
+	cfg.FileSize.MinMaxLOC = 650
+	cfg.FileSize.MinWarnToMaxGap = 150
+	cfg.SecretLogging.Allowlist.LiteralPatterns = []string{`ghp_[a-z0-9]+`}
+
+	err := config.ValidatePolicyConfig(&cfg)
+
+	assert.NoError(t, err)
+	assert.Len(t, cfg.SecretLogging.CompiledAllowedLiteralPatterns, 1)
+	assert.True(t, security.IsAllowedLiteral("ghp_abcdef123456", cfg.SecretLogging.CompiledAllowedLiteralPatterns))
+}
+
 func TestScanContentForSecrets(t *testing.T) {
 	cfg := config.PolicySecretLoggingConfig{
 		Keywords:           []string{"password"},

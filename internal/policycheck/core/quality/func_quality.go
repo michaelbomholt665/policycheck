@@ -7,6 +7,7 @@ import (
 	"policycheck/internal/policycheck/config"
 	"policycheck/internal/policycheck/host"
 	"policycheck/internal/policycheck/types"
+	"policycheck/internal/policycheck/utils"
 )
 
 // CheckFunctionQualityPolicies evaluates function-level quality facts against thresholds.
@@ -29,7 +30,24 @@ func CheckFunctionQualityPolicies(ctx context.Context, root string, cfg config.P
 		}}
 	}
 
+	facts = filterFunctionQualityFactsByRoots(facts, cfg.Paths.FunctionQualityRoots)
+
 	return EvaluateFunctionQualityFacts(facts, cfg)
+}
+
+func filterFunctionQualityFactsByRoots(facts []types.PolicyFact, roots []string) []types.PolicyFact {
+	if len(roots) == 0 {
+		return facts
+	}
+
+	filtered := make([]types.PolicyFact, 0, len(facts))
+	for _, fact := range facts {
+		if utils.HasPrefix(fact.FilePath, roots) {
+			filtered = append(filtered, fact)
+		}
+	}
+
+	return filtered
 }
 
 // EvaluateFunctionQualityFacts evaluates extracted facts against configured thresholds.
@@ -59,17 +77,7 @@ func evaluateSingleFact(fact types.PolicyFact, cfg config.PolicyFunctionQualityC
 	var mildWarnings []types.Violation
 	loc := fact.EndLine - fact.LineNumber + 1
 
-	var warnLOC, maxLOC int
-	switch fact.Language {
-	case "python":
-		warnLOC, maxLOC = cfg.PythonWarnLOC, cfg.PythonMaxLOC
-	case "typescript":
-		warnLOC, maxLOC = cfg.TypeScriptWarnLOC, cfg.TypeScriptMaxLOC
-	case "go":
-		warnLOC, maxLOC = cfg.GoWarnLOC, cfg.GoMaxLOC
-	default:
-		warnLOC, maxLOC = cfg.WarnLOC, cfg.MaxLOC
-	}
+	warnLOC, maxLOC := resolveLanguageLOCLimits(fact.Language, cfg)
 
 	if fact.Complexity >= cfg.ErrorCTXAndLOCCTX && loc >= cfg.ErrorCTXAndLOCLOC {
 		return []types.Violation{newFuncViolation(fact, "error", fmt.Sprintf("function %s is both complex and long (CTX:%d, LOC:%d); must be refactored", fact.SymbolName, fact.Complexity, loc))}, nil
@@ -83,31 +91,73 @@ func evaluateSingleFact(fact types.PolicyFact, cfg config.PolicyFunctionQualityC
 		return []types.Violation{newFuncViolation(fact, "error", fmt.Sprintf("function %s is excessively long (LOC:%d); hard limit is %d", fact.SymbolName, loc, maxLOC))}, nil
 	}
 
-	if fact.Complexity >= cfg.ImmediateRefactorCTXMin {
-		viols = append(viols, newFuncViolation(fact, "warn", fmt.Sprintf("function %s requires immediate refactoring (CTX:%d); exceeds refactor threshold %d", fact.SymbolName, fact.Complexity, cfg.ImmediateRefactorCTXMin)))
-	} else if fact.Complexity >= cfg.ElevatedCTXMin {
-		viols = append(viols, newFuncViolation(fact, "warn", fmt.Sprintf("function %s has elevated complexity (CTX:%d); exceeds elevated threshold %d", fact.SymbolName, fact.Complexity, cfg.ElevatedCTXMin)))
-	} else if fact.Complexity >= cfg.MildCTXMin {
-		v := newFuncViolation(fact, "warn", fmt.Sprintf("function %s has mild complexity (CTX:%d); exceeds mild threshold %d", fact.SymbolName, fact.Complexity, cfg.MildCTXMin))
-		v.RuleID = "function-quality.mild-ctx"
-		mildWarnings = append(mildWarnings, v)
-	}
+	viols, mildWarnings = appendComplexityViolations(viols, mildWarnings, fact, cfg)
 
 	if loc >= warnLOC {
 		viols = append(viols, newFuncViolation(fact, "warn", fmt.Sprintf("function %s is approaching size limit (LOC:%d); warn threshold is %d", fact.SymbolName, loc, warnLOC)))
 	}
 
-	if fact.ParamCount >= cfg.MaxParameterCount {
-		viols = append(viols, newFuncViolation(fact, "error", fmt.Sprintf("function %s has excessive parameters (%d); hard limit is %d", fact.SymbolName, fact.ParamCount, cfg.MaxParameterCount)))
-	} else if fact.ParamCount >= cfg.WarnParameterCount {
-		viols = append(viols, newFuncViolation(fact, "warn", fmt.Sprintf("function %s has many parameters (%d); warn threshold is %d", fact.SymbolName, fact.ParamCount, cfg.WarnParameterCount)))
-	}
+	viols = appendParameterViolations(viols, fact, cfg)
 
 	if fact.RepeatedNilGuards >= cfg.NilGuardRepeatWarnCount {
 		viols = append(viols, newFuncViolation(fact, "warn", fmt.Sprintf("function %s repeats plain nil-guard checks %d times; CTX may be inflated by distant repeated guards", fact.SymbolName, fact.RepeatedNilGuards)))
 	}
 
 	return viols, mildWarnings
+}
+
+func resolveLanguageLOCLimits(language string, cfg config.PolicyFunctionQualityConfig) (int, int) {
+	switch language {
+	case "python":
+		return cfg.PythonWarnLOC, cfg.PythonMaxLOC
+	case "typescript":
+		return cfg.TypeScriptWarnLOC, cfg.TypeScriptMaxLOC
+	case "go":
+		return cfg.GoWarnLOC, cfg.GoMaxLOC
+	default:
+		return cfg.WarnLOC, cfg.MaxLOC
+	}
+}
+
+func appendComplexityViolations(
+	viols []types.Violation,
+	mildWarnings []types.Violation,
+	fact types.PolicyFact,
+	cfg config.PolicyFunctionQualityConfig,
+) ([]types.Violation, []types.Violation) {
+	if fact.Complexity >= cfg.ImmediateRefactorCTXMin {
+		viols = append(viols, newFuncViolation(fact, "warn", fmt.Sprintf("function %s requires immediate refactoring (CTX:%d); exceeds refactor threshold %d", fact.SymbolName, fact.Complexity, cfg.ImmediateRefactorCTXMin)))
+		return viols, mildWarnings
+	}
+
+	if fact.Complexity >= cfg.ElevatedCTXMin {
+		viols = append(viols, newFuncViolation(fact, "warn", fmt.Sprintf("function %s has elevated complexity (CTX:%d); exceeds elevated threshold %d", fact.SymbolName, fact.Complexity, cfg.ElevatedCTXMin)))
+		return viols, mildWarnings
+	}
+
+	if fact.Complexity >= cfg.MildCTXMin {
+		v := newFuncViolation(fact, "warn", fmt.Sprintf("function %s has mild complexity (CTX:%d); exceeds mild threshold %d", fact.SymbolName, fact.Complexity, cfg.MildCTXMin))
+		v.RuleID = "function-quality.mild-ctx"
+		mildWarnings = append(mildWarnings, v)
+	}
+
+	return viols, mildWarnings
+}
+
+func appendParameterViolations(
+	viols []types.Violation,
+	fact types.PolicyFact,
+	cfg config.PolicyFunctionQualityConfig,
+) []types.Violation {
+	if fact.ParamCount >= cfg.MaxParameterCount {
+		return append(viols, newFuncViolation(fact, "error", fmt.Sprintf("function %s has excessive parameters (%d); hard limit is %d", fact.SymbolName, fact.ParamCount, cfg.MaxParameterCount)))
+	}
+
+	if fact.ParamCount >= cfg.WarnParameterCount {
+		return append(viols, newFuncViolation(fact, "warn", fmt.Sprintf("function %s has many parameters (%d); warn threshold is %d", fact.SymbolName, fact.ParamCount, cfg.WarnParameterCount)))
+	}
+
+	return viols
 }
 
 func newFuncViolation(fact types.PolicyFact, severity, msg string) types.Violation {

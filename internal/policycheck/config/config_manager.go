@@ -3,7 +3,11 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
+	"strings"
+
+	"policycheck/internal/policycheck/utils"
 )
 
 // PolicyConfig is the root configuration structure loaded from policy-gate.toml.
@@ -142,15 +146,17 @@ type PolicyGoVersionConfig struct {
 
 // PolicyHygieneConfig defines symbol naming and doc style limits.
 type PolicyHygieneConfig struct {
-	ScanRoots           []string `toml:"scan_roots"`
-	ExcludePrefixes     []string `toml:"exclude_prefixes"`
-	MinNameTokens       int      `toml:"min_name_tokens"`
-	ExemptFunctionNames []string `toml:"exempt_function_names"`
+	ScanRoots                 []string `toml:"scan_roots"`
+	ExcludePrefixes           []string `toml:"exclude_prefixes"`
+	MinNameTokens             int      `toml:"min_name_tokens"`
+	CrossBackendMinNameTokens int      `toml:"cross_backend_min_name_tokens"`
+	ExemptFunctionNames       []string `toml:"exempt_function_names"`
 }
 
 // PolicyPackageRulesConfig defines package-level file limits.
 type PolicyPackageRulesConfig struct {
 	ScanRoots          []string `toml:"scan_roots"`
+	ExcludePrefixes    []string `toml:"exclude_prefixes"`
 	MaxProductionFiles int      `toml:"max_production_files"`
 	MinConcerns        int      `toml:"min_concerns"`
 	MaxConcerns        int      `toml:"max_concerns"`
@@ -163,9 +169,20 @@ type PolicyAICompatibilityConfig struct {
 
 // PolicyScopeGuardConfig defines forbidden calls for core logic.
 type PolicyScopeGuardConfig struct {
-	Enabled        bool     `toml:"enabled"`
-	ForbiddenCalls []string `toml:"forbidden_calls"`
+	Enabled             bool     `toml:"enabled"`
+	Mode                string   `toml:"mode"`
+	ForbiddenCalls      []string `toml:"forbidden_calls"`
+	AllowedPathPrefixes []string `toml:"allowed_path_prefixes"`
 }
+
+const (
+	// ScopeGuardModeAllow disables forbidden-call enforcement.
+	ScopeGuardModeAllow = "allow"
+	// ScopeGuardModeRestrict allows forbidden calls only in approved repo-relative paths.
+	ScopeGuardModeRestrict = "restrict"
+	// ScopeGuardModeBan disallows forbidden calls in every scanned file.
+	ScopeGuardModeBan = "ban"
+)
 
 // PolicyCustomRule allows regex-based rules via configuration.
 type PolicyCustomRule struct {
@@ -203,8 +220,10 @@ func ApplyPolicyConfigDefaults(cfg *PolicyConfig) error {
 	applyDefaultSlice(&cfg.Hygiene.ScanRoots, []string{"internal", "cmd"})
 	applyDefaultSlice(&cfg.Hygiene.ExcludePrefixes, []string{"cmd/policycheck"})
 	applyDefaultInt(&cfg.Hygiene.MinNameTokens, 2)
+	applyDefaultInt(&cfg.Hygiene.CrossBackendMinNameTokens, 3)
 	applyDefaultSlice(&cfg.Hygiene.ExemptFunctionNames, []string{"Close", "Read", "Write"})
 	applyDefaultSlice(&cfg.PackageRules.ScanRoots, []string{"cmd", "internal", "test"})
+	applyDefaultSlice(&cfg.PackageRules.ExcludePrefixes, []string{})
 	applyDefaultInt(&cfg.PackageRules.MaxProductionFiles, 10)
 	applyDefaultInt(&cfg.PackageRules.MinConcerns, 1)
 	applyDefaultInt(&cfg.PackageRules.MaxConcerns, 2)
@@ -226,7 +245,19 @@ func ApplyPolicyConfigDefaults(cfg *PolicyConfig) error {
 	applyDefaultSlice(&cfg.SecretLogging.PlaceholderStrings, []string{"<token>", "<password>", "<secret>", "<api-key>", "changeme", "change_me", "replace_me", "your_token_here"})
 	applyDefaultSlice(&cfg.AICompatibility.RequiredFlags, []string{"--ai", "--user"})
 
-	applyDefaultSlice(&cfg.ScopeGuard.ForbiddenCalls, []string{"os.WriteFile", "os.Rename"})
+	if cfg.ScopeGuard.Mode == "" {
+		cfg.ScopeGuard.Mode = ScopeGuardModeRestrict
+	}
+	applyDefaultSlice(&cfg.ScopeGuard.ForbiddenCalls, []string{
+		"os.WriteFile",
+		"os.Rename",
+		"os.Remove",
+		"os.RemoveAll",
+		"os.Chmod",
+		"os.Chown",
+		"os.Mkdir",
+		"os.MkdirAll",
+	})
 
 	return nil
 }
@@ -253,12 +284,22 @@ func ValidatePolicyConfig(cfg *PolicyConfig) error {
 		return fmt.Errorf("file_size.min_max_loc (%d) must be at least min_warn_loc (%d) + min_warn_to_max_gap (%d)", effectiveMax, effectiveWarn, gap)
 	}
 
+	totalAllowedPatterns := len(cfg.SecretLogging.AllowedLiteralPatterns) + len(cfg.SecretLogging.Allowlist.LiteralPatterns)
+	cfg.SecretLogging.CompiledAllowedLiteralPatterns = make([]*regexp.Regexp, 0, totalAllowedPatterns)
+
 	// Validate and compile SecretLogging allowed patterns
-	cfg.SecretLogging.CompiledAllowedLiteralPatterns = make([]*regexp.Regexp, 0, len(cfg.SecretLogging.AllowedLiteralPatterns))
 	for i, pattern := range cfg.SecretLogging.AllowedLiteralPatterns {
 		compiled, err := regexp.Compile(pattern)
 		if err != nil {
 			return fmt.Errorf("secret_logging.allowed_literal_patterns[%d]: invalid pattern: %w", i, err)
+		}
+		cfg.SecretLogging.CompiledAllowedLiteralPatterns = append(cfg.SecretLogging.CompiledAllowedLiteralPatterns, compiled)
+	}
+
+	for i, pattern := range cfg.SecretLogging.Allowlist.LiteralPatterns {
+		compiled, err := regexp.Compile(pattern)
+		if err != nil {
+			return fmt.Errorf("secret_logging.allowlist.literal_patterns[%d]: invalid pattern: %w", i, err)
 		}
 		cfg.SecretLogging.CompiledAllowedLiteralPatterns = append(cfg.SecretLogging.CompiledAllowedLiteralPatterns, compiled)
 	}
@@ -281,5 +322,49 @@ func ValidatePolicyConfig(cfg *PolicyConfig) error {
 		rule.CompiledPattern = compiled
 	}
 
+	if err := validateScopeGuardConfig(&cfg.ScopeGuard); err != nil {
+		return fmt.Errorf("scope_guard: %w", err)
+	}
+
 	return nil
+}
+
+func validateScopeGuardConfig(cfg *PolicyScopeGuardConfig) error {
+	switch cfg.Mode {
+	case ScopeGuardModeAllow, ScopeGuardModeRestrict, ScopeGuardModeBan:
+	default:
+		return fmt.Errorf("invalid mode %q, must be %q, %q, or %q", cfg.Mode, ScopeGuardModeAllow, ScopeGuardModeRestrict, ScopeGuardModeBan)
+	}
+
+	normalizedPrefixes := make([]string, 0, len(cfg.AllowedPathPrefixes))
+	for _, prefix := range cfg.AllowedPathPrefixes {
+		normalizedPrefix, err := normalizeScopeGuardPrefix(prefix)
+		if err != nil {
+			return err
+		}
+		normalizedPrefixes = append(normalizedPrefixes, normalizedPrefix)
+	}
+	cfg.AllowedPathPrefixes = normalizedPrefixes
+
+	return nil
+}
+
+func normalizeScopeGuardPrefix(prefix string) (string, error) {
+	trimmed := strings.TrimSpace(prefix)
+	if trimmed == "" {
+		return "", fmt.Errorf("allowed_path_prefixes must not contain empty values")
+	}
+	if filepath.IsAbs(trimmed) {
+		return "", fmt.Errorf("allowed_path_prefixes must be repo-relative: %q", prefix)
+	}
+
+	normalizedPrefix := utils.NormalizePolicyPath(trimmed)
+	if normalizedPrefix == "" || normalizedPrefix == "." {
+		return "", fmt.Errorf("allowed_path_prefixes must not point to the repository root: %q", prefix)
+	}
+	if normalizedPrefix == ".." || strings.HasPrefix(normalizedPrefix, "../") {
+		return "", fmt.Errorf("allowed_path_prefixes must stay within the repository: %q", prefix)
+	}
+
+	return normalizedPrefix, nil
 }

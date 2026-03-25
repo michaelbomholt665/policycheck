@@ -96,3 +96,34 @@ func TestCheckArchitecture_NotEnforced(t *testing.T) {
 	violations := structure.CheckArchitecture(context.Background(), tmp, cfg)
 	assert.Empty(t, violations)
 }
+
+func TestCheckArchitecture_ConcernPaths(t *testing.T) {
+	tmp := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(tmp, "internal/db"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmp, "docs/database"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "internal/db/schema.go"), []byte("package db"), 0o644))
+
+	cfg := config.PolicyConfig{
+		Architecture: config.PolicyArchitectureConfig{
+			Enforce: true,
+			Concerns: []config.PolicyArchitectureTopic{
+				{
+					Name:          "database",
+					Tags:          []string{"database"},
+					Roots:         []string{"internal/db"},
+					ConfigPaths:   []string{"internal/config"},
+					SchemaPaths:   []string{"internal/db/schema.go"},
+					ContractPaths: []string{"docs/database"},
+					APIPaths:      []string{"internal/db"},
+				},
+			},
+		},
+	}
+
+	violations := structure.CheckArchitecture(context.Background(), tmp, cfg)
+
+	require.Len(t, violations, 1)
+	assert.Equal(t, "structure.architecture", violations[0].RuleID)
+	assert.Contains(t, violations[0].Message, `references missing config_paths entry "internal/config"`)
+}

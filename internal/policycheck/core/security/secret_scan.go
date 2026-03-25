@@ -57,7 +57,11 @@ func CheckSecretLoggingPolicies(ctx context.Context, root string, cfg config.Pol
 		}
 
 		if strings.HasSuffix(path, ".go") {
-			fileViols := ScanGoFileForSecrets(rel, path, string(content), patterns, cfg.SecretLogging)
+			fileViols := ScanGoFileForSecrets(secretScanInput{
+				rel:      rel,
+				fullPath: path,
+				content:  string(content),
+			}, patterns, cfg.SecretLogging)
 			viols = append(viols, fileViols...)
 		} else {
 			fileViols := ScanContentForSecrets(rel, string(content), patterns, cfg.SecretLogging)
@@ -87,6 +91,20 @@ type secretVisitor struct {
 	parents  []ast.Node
 }
 
+type secretContext struct {
+	rel          string
+	lineNum      int
+	isLogLiteral bool
+	patterns     []SecretPattern
+	cfg          config.PolicySecretLoggingConfig
+}
+
+type secretScanInput struct {
+	rel      string
+	fullPath string
+	content  string
+}
+
 func (v *secretVisitor) Visit(n ast.Node) ast.Visitor {
 	if n == nil {
 		v.parents = v.parents[:len(v.parents)-1]
@@ -107,31 +125,8 @@ func (v *secretVisitor) checkStringLiteral(lit *ast.BasicLit) {
 		return
 	}
 
-	// Contextual Allowlisting
-	if len(v.parents) >= 2 {
-		parent := v.parents[len(v.parents)-2]
-
-		// 1. Struct Tag
-		if field, ok := parent.(*ast.Field); ok && field.Tag == lit {
-			return
-		}
-
-		// 2. Map Key
-		if kv, ok := parent.(*ast.KeyValueExpr); ok && kv.Key == lit {
-			return
-		}
-
-		// 3. os.Getenv / os.LookupEnv
-		if call, ok := parent.(*ast.CallExpr); ok {
-			if isOSGetenvCall(call) {
-				return
-			}
-		}
-
-		// 4. Import Path
-		if _, ok := parent.(*ast.ImportSpec); ok {
-			return
-		}
+	if v.checkContextualAllowlist(lit) {
+		return
 	}
 
 	pos := v.fset.Position(lit.Pos())
@@ -149,21 +144,62 @@ func (v *secretVisitor) checkStringLiteral(lit *ast.BasicLit) {
 		return
 	}
 
-	isLogLiteral := false
-	for i := len(v.parents) - 1; i >= 0; i-- {
-		if call, ok := v.parents[i].(*ast.CallExpr); ok {
-			if isLoggingSink(call.Fun, v.cfg) {
-				isLogLiteral = true
-				break
-			}
-		}
-	}
-
-	if best := evaluateSecretString(val, v.rel, pos.Line, isLogLiteral, v.patterns, v.cfg); best != nil {
+	isLogLiteral := v.isContextLoggingSink()
+	if best := evaluateSecretString(val, secretContext{
+		rel:          v.rel,
+		lineNum:      pos.Line,
+		isLogLiteral: isLogLiteral,
+		patterns:     v.patterns,
+		cfg:          v.cfg,
+	}); best != nil {
 		v.viols = append(v.viols, *best)
 	}
 
-	// Entropy Gating
+	v.checkEntropy(val, pos)
+}
+
+func (v *secretVisitor) checkContextualAllowlist(lit *ast.BasicLit) bool {
+	if len(v.parents) < 2 {
+		return false
+	}
+	parent := v.parents[len(v.parents)-2]
+
+	// 1. Struct Tag
+	if field, ok := parent.(*ast.Field); ok && field.Tag == lit {
+		return true
+	}
+
+	// 2. Map Key
+	if kv, ok := parent.(*ast.KeyValueExpr); ok && kv.Key == lit {
+		return true
+	}
+
+	// 3. os.Getenv / os.LookupEnv
+	if call, ok := parent.(*ast.CallExpr); ok {
+		if isOSGetenvCall(call) {
+			return true
+		}
+	}
+
+	// 4. Import Path
+	if _, ok := parent.(*ast.ImportSpec); ok {
+		return true
+	}
+	return false
+}
+
+func (v *secretVisitor) isContextLoggingSink() bool {
+	for i := len(v.parents) - 1; i >= 0; i-- {
+		if call, ok := v.parents[i].(*ast.CallExpr); ok {
+			if isLoggingSink(call.Fun, v.cfg) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (v *secretVisitor) checkEntropy(val string, pos token.Position) {
 	if len(val) > 32 && !strings.Contains(val, " ") && !isAllHex(val) && !isUUID(val) {
 		ent := calculateShannonEntropy(val)
 		if ent > 4.5 {
@@ -193,24 +229,32 @@ func isOSGetenvCall(call *ast.CallExpr) bool {
 func checkSuppression(fset *token.FileSet, fileNode *ast.File, pos token.Pos) string {
 	line := fset.Position(pos).Line
 	for _, cg := range fileNode.Comments {
-		for _, comment := range cg.List {
-			if fset.Position(comment.Pos()).Line == line {
-				if idx := strings.Index(comment.Text, "//nolint:secret"); idx != -1 {
-					reasonIdx := strings.Index(comment.Text, "reason:")
-					if reasonIdx != -1 {
-						return strings.TrimSpace(comment.Text[reasonIdx+7:])
-					}
-					return "no reason provided"
-				}
-			}
+		if reason, ok := checkCommentGroupForSuppression(fset, cg, line); ok {
+			return reason
 		}
 	}
 	return ""
 }
 
+func checkCommentGroupForSuppression(fset *token.FileSet, cg *ast.CommentGroup, line int) (string, bool) {
+	for _, comment := range cg.List {
+		if fset.Position(comment.Pos()).Line != line {
+			continue
+		}
+		if idx := strings.Index(comment.Text, "//nolint:secret"); idx != -1 {
+			reasonIdx := strings.Index(comment.Text, "reason:")
+			if reasonIdx != -1 {
+				return strings.TrimSpace(comment.Text[reasonIdx+7:]), true
+			}
+			return "no reason provided", true
+		}
+	}
+	return "", false
+}
+
 func isAllHex(s string) bool {
 	for _, r := range s {
-		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+		if !isHexDigit(r) {
 			return false
 		}
 	}
@@ -226,13 +270,15 @@ func isUUID(s string) bool {
 			if r != '-' {
 				return false
 			}
-		} else {
-			if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
-				return false
-			}
+		} else if !isHexDigit(r) {
+			return false
 		}
 	}
 	return true
+}
+
+func isHexDigit(r rune) bool {
+	return (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
 }
 
 func calculateShannonEntropy(s string) float64 {
@@ -253,18 +299,18 @@ func calculateShannonEntropy(s string) float64 {
 }
 
 // ScanGoFileForSecrets uses AST parsing to find string literals and evaluate them for secrets.
-func ScanGoFileForSecrets(rel, fullPath, content string, patterns []SecretPattern, cfg config.PolicySecretLoggingConfig) []types.Violation {
+func ScanGoFileForSecrets(input secretScanInput, patterns []SecretPattern, cfg config.PolicySecretLoggingConfig) []types.Violation {
 	fset := token.NewFileSet()
-	fileNode, err := parser.ParseFile(fset, fullPath, content, parser.ParseComments)
+	fileNode, err := parser.ParseFile(fset, input.fullPath, input.content, parser.ParseComments)
 	if err != nil {
 		// Fallback to naive scan if AST fails
-		return ScanContentForSecrets(rel, content, patterns, cfg)
+		return ScanContentForSecrets(input.rel, input.content, patterns, cfg)
 	}
 
 	visitor := &secretVisitor{
 		fset:     fset,
 		fileNode: fileNode,
-		rel:      rel,
+		rel:      input.rel,
 		patterns: patterns,
 		cfg:      cfg,
 	}
@@ -376,7 +422,12 @@ func ScanContentForSecrets(rel, content string, patterns []SecretPattern, cfg co
 
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
-		if best := evaluateSecretString(line, rel, i+1, false, patterns, cfg); best != nil {
+		if best := evaluateSecretString(line, secretContext{
+			rel:      rel,
+			lineNum:  i + 1,
+			patterns: patterns,
+			cfg:      cfg,
+		}); best != nil {
 			allViols = append(allViols, *best)
 		}
 	}
@@ -384,15 +435,15 @@ func ScanContentForSecrets(rel, content string, patterns []SecretPattern, cfg co
 	return FilterAllowlistedSecretFindings(allViols, cfg)
 }
 
-func evaluateSecretString(raw, rel string, lineNum int, isLogLiteral bool, patterns []SecretPattern, cfg config.PolicySecretLoggingConfig) *types.Violation {
-	if IsBenignSecretExample(raw, cfg.BenignHints) || IsObviousPlaceholderSecret(raw, cfg.PlaceholderStrings) || IsAllowedLiteral(raw, cfg.CompiledAllowedLiteralPatterns) {
+func evaluateSecretString(raw string, ctx secretContext) *types.Violation {
+	if IsBenignSecretExample(raw, ctx.cfg.BenignHints) || IsObviousPlaceholderSecret(raw, ctx.cfg.PlaceholderStrings) || IsAllowedLiteral(raw, ctx.cfg.CompiledAllowedLiteralPatterns) {
 		return nil
 	}
 
 	var lineViols []types.Violation
 
-	lineViols = append(lineViols, checkSecretRegexpPatterns(raw, rel, lineNum, isLogLiteral, patterns)...)
-	lineViols = append(lineViols, checkSecretKeywords(raw, rel, lineNum, isLogLiteral, cfg.Keywords)...)
+	lineViols = append(lineViols, checkSecretRegexpPatterns(raw, ctx)...)
+	lineViols = append(lineViols, checkSecretKeywords(raw, ctx)...)
 
 	best := PickBestSecretFinding(lineViols)
 	if best.RuleID != "" {
@@ -401,18 +452,18 @@ func evaluateSecretString(raw, rel string, lineNum int, isLogLiteral bool, patte
 	return nil
 }
 
-func checkSecretRegexpPatterns(raw, rel string, lineNum int, isLogLiteral bool, patterns []SecretPattern) []types.Violation {
+func checkSecretRegexpPatterns(raw string, ctx secretContext) []types.Violation {
 	var viols []types.Violation
-	for _, p := range patterns {
+	for _, p := range ctx.patterns {
 		if p.Pattern.MatchString(raw) {
 			msg := fmt.Sprintf("secret pattern '%s' detected", p.ID)
-			if isLogLiteral {
+			if ctx.isLogLiteral {
 				msg = fmt.Sprintf("secret pattern '%s' detected in log literal", p.ID)
 			}
 			viols = append(viols, types.Violation{
 				RuleID:   p.ID,
-				File:     rel,
-				Line:     lineNum,
+				File:     ctx.rel,
+				Line:     ctx.lineNum,
 				Message:  msg,
 				Severity: p.Severity,
 			})
@@ -421,49 +472,67 @@ func checkSecretRegexpPatterns(raw, rel string, lineNum int, isLogLiteral bool, 
 	return viols
 }
 
-func checkSecretKeywords(raw, rel string, lineNum int, isLogLiteral bool, keywords []string) []types.Violation {
+func checkSecretKeywords(raw string, ctx secretContext) []types.Violation {
 	var viols []types.Violation
 
-	// 1. Contextual Allowlisting: format strings and error messages
-	if strings.Contains(raw, "%s") || strings.Contains(raw, "%d") || strings.Contains(raw, "%v") || strings.Contains(raw, "%q") || strings.Contains(raw, "%w") {
-		return viols
-	}
-
-	hasAssignment := strings.Contains(raw, "=") || strings.Contains(raw, ":")
-
-	// 2. Sentences: if it has many spaces, it's probably not a secret assignment even if it has a colon/equal.
-	if strings.Count(raw, " ") > 2 {
-		return viols
-	}
-
-	// 3. Short strings without assignments are likely just identifiers or short words.
-	if len(raw) < 16 && !hasAssignment {
+	if shouldSkipKeywordScan(raw) {
 		return viols
 	}
 
 	lowerRaw := strings.ToLower(raw)
-	for _, keyword := range keywords {
+	for _, keyword := range ctx.cfg.Keywords {
 		lowerKeyword := strings.ToLower(keyword)
 		if !strings.Contains(lowerRaw, lowerKeyword) {
 			continue
 		}
 
-		// Skip if the literal is exactly the keyword or keyword with simple punctuation
-		if len(raw) <= len(keyword)+2 {
+		if isTriviallyShortKeywordLiteral(raw, keyword) {
 			continue
 		}
 
-		msg := fmt.Sprintf("potential secret keyword '%s' found in log/string literal", keyword)
-		if isLogLiteral {
-			msg = fmt.Sprintf("potential secret keyword '%s' found in log literal", keyword)
-		}
+		msg := buildSecretKeywordMessage(keyword, ctx.isLogLiteral)
 		viols = append(viols, types.Violation{
 			RuleID:   "secret-keyword",
-			File:     rel,
-			Line:     lineNum,
+			File:     ctx.rel,
+			Line:     ctx.lineNum,
 			Message:  msg,
 			Severity: "MEDIUM",
 		})
 	}
 	return viols
+}
+
+func shouldSkipKeywordScan(raw string) bool {
+	if containsFormattingDirective(raw) {
+		return true
+	}
+
+	if strings.Count(raw, " ") > 2 {
+		return true
+	}
+
+	hasAssignment := strings.Contains(raw, "=") || strings.Contains(raw, ":")
+	return len(raw) < 16 && !hasAssignment
+}
+
+func containsFormattingDirective(raw string) bool {
+	formatTokens := []string{"%s", "%d", "%v", "%q", "%w"}
+	for _, token := range formatTokens {
+		if strings.Contains(raw, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func isTriviallyShortKeywordLiteral(raw, keyword string) bool {
+	return len(raw) <= len(keyword)+2
+}
+
+func buildSecretKeywordMessage(keyword string, isLogLiteral bool) string {
+	if isLogLiteral {
+		return fmt.Sprintf("potential secret keyword '%s' found in log literal", keyword)
+	}
+
+	return fmt.Sprintf("potential secret keyword '%s' found in log/string literal", keyword)
 }

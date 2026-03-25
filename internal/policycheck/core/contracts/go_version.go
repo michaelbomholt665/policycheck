@@ -63,31 +63,37 @@ func scanForVersionMismatches(root, goVersion string) []types.Violation {
 	}
 
 	for _, file := range filesToCheck {
-		path := filepath.Join(root, filepath.FromSlash(file))
-		content, err := os.ReadFile(path)
-		if err != nil {
+		viols = append(viols, scanFileForGoVersionMismatch(root, file, goVersion)...)
+	}
+	return viols
+}
+
+func scanFileForGoVersionMismatch(root, file, goVersion string) []types.Violation {
+	var viols []types.Violation
+	path := filepath.Join(root, filepath.FromSlash(file))
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	lines := strings.Split(string(content), "\n")
+	for i, line := range lines {
+		// Naive check: if line contains "go " or "golang" or "GO_VERSION", it might be declaring a version
+		if strings.Contains(strings.ToLower(line), goVersion) {
 			continue
 		}
-		
-		lines := strings.Split(string(content), "\n")
-		for i, line := range lines {
-			// Naive check: if line contains "go " or "golang" or "GO_VERSION", it might be declaring a version
-			if strings.Contains(strings.ToLower(line), goVersion) {
-				continue
-			}
 
-			// Specifically flag mismatched explicit version strings
-			// A real implementation might use a regex to find semantic versions and compare
-			if strings.Contains(line, "1.2") && !strings.Contains(line, goVersion) {
-				if strings.Contains(line, "GO_VERSION") || strings.Contains(line, "go:") || strings.Contains(line, "golang:") {
-					viols = append(viols, types.Violation{
-						RuleID:   "go-version-mismatch",
-						File:     filepath.ToSlash(file),
-						Line:     i + 1,
-						Message:  fmt.Sprintf("potential go version mismatch; go.mod is %s but found: %s", goVersion, strings.TrimSpace(line)),
-						Severity: "warn",
-					})
-				}
+		// Specifically flag mismatched explicit version strings
+		// A real implementation might use a regex to find semantic versions and compare
+		if strings.Contains(line, "1.2") && !strings.Contains(line, goVersion) {
+			if strings.Contains(line, "GO_VERSION") || strings.Contains(line, "go:") || strings.Contains(line, "golang:") {
+				viols = append(viols, types.Violation{
+					RuleID:   "go-version-mismatch",
+					File:     filepath.ToSlash(file),
+					Line:     i + 1,
+					Message:  fmt.Sprintf("potential go version mismatch; go.mod is %s but found: %s", goVersion, strings.TrimSpace(line)),
+					Severity: "warn",
+				})
 			}
 		}
 	}

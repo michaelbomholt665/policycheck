@@ -25,19 +25,58 @@ type SecretPattern struct {
 
 // BuiltInPatterns returns the default set of high-confidence secret patterns.
 func BuiltInPatterns() []SecretPattern {
+	patterns := make([]SecretPattern, 0)
+	patterns = append(patterns, builtInPasswordAndGenericPatterns()...)
+	patterns = append(patterns, builtInAuthTokenPatterns()...)
+	patterns = append(patterns, builtInAPIKeyPatterns()...)
+	patterns = append(patterns, builtInDSNPatterns()...)
+	patterns = append(patterns, builtInHookPatterns()...)
+	patterns = append(patterns, builtInLanguageSpecificPatterns()...)
+	patterns = append(patterns, builtInKeyMaterialPatterns()...)
+	patterns = append(patterns, builtInHeuristicPatterns()...)
+	return patterns
+}
+
+func builtInPasswordAndGenericPatterns() []SecretPattern {
 	return []SecretPattern{
 		{ID: "generic_api_key_assignment", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`(?i)api[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9_\-]{20,}['"]?`)},
 		{ID: "generic_password_assignment", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`(?i)password\s*[:=]\s*['"]?[^\s'"]{8,}['"]?`)},
 		{ID: "generic_secret_assignment", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`(?i)secret\s*[:=]\s*['"]?[a-zA-Z0-9_\-]{20,}['"]?`)},
 		{ID: "generic_token_assignment", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`(?i)token\s*[:=]\s*['"]?[a-zA-Z0-9_\-]{20,}['"]?`)},
 		{ID: "standalone_password_candidate", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`(?i)\b(?:pass|pwd|secret)(?:word)?[a-zA-Z0-9]*[0-9]{2,}[a-zA-Z0-9]*\b`)},
+	}
+}
+
+func builtInAuthTokenPatterns() []SecretPattern {
+	return []SecretPattern{
 		{ID: "authorization_bearer_header", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`(?i)Authorization:\s*Bearer`)},
 		{ID: "bearer_literal", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`(?i)Bearer\s+[a-zA-Z0-9_\-]{20,}`)},
-		{ID: "aws_access_key_id", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`AKIA[0-9A-Z]{16}`)},
 		{ID: "aws_session_access_key_id", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`ASIA[0-9A-Z]{16}`)},
+		{ID: "aws_session_token_assignment", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`(?i)aws[_-]?session[_-]?token\s*[:=]\s*['"]?[a-zA-Z0-9/+=]{100,}['"]?`)},
+		{ID: "github_oauth_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`gho_[a-zA-Z0-9]{36}`)},
+		{ID: "github_user_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`ghu_[a-zA-Z0-9]{36}`)},
+		{ID: "github_refresh_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`ghr_[a-zA-Z0-9]{36}`)},
+		{ID: "github_actions_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`ghs_[a-zA-Z0-9]{36}`)},
+		{ID: "gitlab_trigger_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`glptt-[a-f0-9]{40}`)},
+		{ID: "gitlab_runner_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`GR1348941[a-zA-Z0-9\-_]{20}`)},
+		{ID: "postmark_token", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`(?i)(?:x-postmark|postmark)[_-]?(?:server|account)[_-]?token\s*[:=]\s*['"]?[a-f0-9\-]{36}['"]?`)},
+		{ID: "slack_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`xox[baprs]-[a-zA-Z0-9\-]{10,}`)},
+		{ID: "vault_service_token", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`hvs\.[a-zA-Z0-9_\-]{90,}`)},
+		{ID: "vault_batch_token", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`hvb\.[a-zA-Z0-9_\-]{90,}`)},
+		{ID: "vault_recovery_token", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`hvr\.[a-zA-Z0-9_\-]{90,}`)},
+		{ID: "npm_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`npm_[a-zA-Z0-9]{36}`)},
+		{ID: "pypi_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`pypi-[a-zA-Z0-9]{50,}`)},
+		{ID: "dockerhub_pat", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`dckr_pat_[a-zA-Z0-9_\-]{20,}`)},
+		{ID: "terraform_cloud_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`[a-zA-Z0-9]{14}\.atlasv1\.[a-zA-Z0-9_\-]{60,}`)},
+		{ID: "jwt_token", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]*`)},
+	}
+}
+
+func builtInAPIKeyPatterns() []SecretPattern {
+	return []SecretPattern{
+		{ID: "aws_access_key_id", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`AKIA[0-9A-Z]{16}`)},
 		{ID: "aws_secret_access_key_label", Severity: SecretSeverityLow, Pattern: regexp.MustCompile(`(?i)(?:aws)?[_-]?secret[_-]?access[_-]?key`)},
 		{ID: "aws_secret_access_key_assignment", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`(?i)aws[_-]?secret[_-]?access[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9/+]{40}['"]?`)},
-		{ID: "aws_session_token_assignment", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`(?i)aws[_-]?session[_-]?token\s*[:=]\s*['"]?[a-zA-Z0-9/+=]{100,}['"]?`)},
 		{ID: "gcp_api_key", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`AIza[a-zA-Z0-9_\-]{35}`)},
 		{ID: "google_oauth_client_secret", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`GOCSPX-[a-zA-Z0-9_\-]{28}`)},
 		{ID: "gcp_service_account_type", Severity: SecretSeverityLow, Pattern: regexp.MustCompile(`"type"\s*:\s*"service_account"`)},
@@ -48,14 +87,8 @@ func BuiltInPatterns() []SecretPattern {
 		{ID: "azure_client_secret", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`(?i)azure[_-]?client[_-]?secret\s*[:=]\s*['"]?[a-zA-Z0-9_\-~.]{32,}['"]?`)},
 		{ID: "azure_subscription_key", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`(?i)(?:ocp|subscription)[_-]?apim[_-]?(?:key|subscription[_-]?key)\s*[:=]\s*['"]?[a-f0-9]{32}['"]?`)},
 		{ID: "github_pat_classic", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`ghp_[a-zA-Z0-9]{36}`)},
-		{ID: "github_oauth_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`gho_[a-zA-Z0-9]{36}`)},
-		{ID: "github_user_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`ghu_[a-zA-Z0-9]{36}`)},
-		{ID: "github_refresh_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`ghr_[a-zA-Z0-9]{36}`)},
 		{ID: "github_pat_fine_grained", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}`)},
-		{ID: "github_actions_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`ghs_[a-zA-Z0-9]{36}`)},
 		{ID: "gitlab_pat", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`glpat-[a-zA-Z0-9\-_]{20,}`)},
-		{ID: "gitlab_trigger_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`glptt-[a-f0-9]{40}`)},
-		{ID: "gitlab_runner_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`GR1348941[a-zA-Z0-9\-_]{20}`)},
 		{ID: "openai_legacy_key", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`sk-[a-zA-Z0-9]{48}`)},
 		{ID: "openai_project_key", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`sk-proj-[a-zA-Z0-9\-_]{48,}`)},
 		{ID: "anthropic_api_key", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`sk-ant-[a-zA-Z0-9\-_]{95}`)},
@@ -64,24 +97,17 @@ func BuiltInPatterns() []SecretPattern {
 		{ID: "stripe_publishable_key_live", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`pk_live_[a-zA-Z0-9]{24}`)},
 		{ID: "stripe_publishable_key_test", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`pk_test_[a-zA-Z0-9]{24}`)},
 		{ID: "stripe_restricted_key_live", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`rk_live_[a-zA-Z0-9]{24}`)},
-		{ID: "stripe_webhook_secret", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`whsec_[a-zA-Z0-9]{32,}`)},
 		{ID: "twilio_account_sid", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`AC[a-f0-9]{32}`)},
 		{ID: "twilio_api_key_sid", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`SK[a-f0-9]{32}`)},
 		{ID: "twilio_auth_token", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`(?i)twilio[_-]?auth[_-]?token\s*[:=]\s*['"]?[a-f0-9]{32}['"]?`)},
 		{ID: "sendgrid_api_key", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`SG\.[a-zA-Z0-9_\-]{22}\.[a-zA-Z0-9_\-]{43}`)},
 		{ID: "mailgun_api_key", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`key-[a-f0-9]{32}`)},
-		{ID: "postmark_token", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`(?i)(?:x-postmark|postmark)[_-]?(?:server|account)[_-]?token\s*[:=]\s*['"]?[a-f0-9\-]{36}['"]?`)},
 		{ID: "resend_api_key", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`re_[a-zA-Z0-9_]{32,}`)},
-		{ID: "slack_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`xox[baprs]-[a-zA-Z0-9\-]{10,}`)},
-		{ID: "slack_webhook", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`https://hooks\.slack\.com/services/`)},
-		{ID: "slack_workflow_webhook", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`https://hooks\.slack\.com/workflows/`)},
-		{ID: "vault_service_token", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`hvs\.[a-zA-Z0-9_\-]{90,}`)},
-		{ID: "vault_batch_token", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`hvb\.[a-zA-Z0-9_\-]{90,}`)},
-		{ID: "vault_recovery_token", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`hvr\.[a-zA-Z0-9_\-]{90,}`)},
-		{ID: "npm_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`npm_[a-zA-Z0-9]{36}`)},
-		{ID: "pypi_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`pypi-[a-zA-Z0-9]{50,}`)},
-		{ID: "dockerhub_pat", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`dckr_pat_[a-zA-Z0-9_\-]{20,}`)},
-		{ID: "terraform_cloud_token", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`[a-zA-Z0-9]{14}\.atlasv1\.[a-zA-Z0-9_\-]{60,}`)},
+	}
+}
+
+func builtInDSNPatterns() []SecretPattern {
+	return []SecretPattern{
 		{ID: "mongodb_srv_dsn", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`mongodb\+srv://[^:]+:[^@]+@`)},
 		{ID: "mongodb_dsn", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`mongodb://[^:]+:[^@]+@`)},
 		{ID: "postgres_dsn", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`postgres(?:ql)?://[^:]+:[^@]+@`)},
@@ -92,12 +118,19 @@ func BuiltInPatterns() []SecretPattern {
 		{ID: "amqp_dsn", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`amqps?://[^:]+:[^@]+@`)},
 		{ID: "elasticsearch_dsn", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`https?://[^:]+:[^@]{8,}@[^/]+:92[0-9]{2}`)},
 		{ID: "clickhouse_dsn", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`clickhouse://[^:]+:[^@]+@`)},
-		{ID: "rsa_private_key_pem", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`-----BEGIN\s+RSA\s+PRIVATE\s+KEY-----`)},
-		{ID: "pkcs8_private_key_pem", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`-----BEGIN\s+PRIVATE\s+KEY-----`)},
-		{ID: "openssh_private_key_pem", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`-----BEGIN\s+OPENSSH\s+PRIVATE\s+KEY-----`)},
-		{ID: "ec_private_key_pem", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`-----BEGIN\s+EC\s+PRIVATE\s+KEY-----`)},
-		{ID: "pgp_private_key_pem", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`-----BEGIN\s+PGP\s+PRIVATE\s+KEY\s+BLOCK-----`)},
-		{ID: "jwt_token", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]*`)},
+	}
+}
+
+func builtInHookPatterns() []SecretPattern {
+	return []SecretPattern{
+		{ID: "stripe_webhook_secret", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`whsec_[a-zA-Z0-9]{32,}`)},
+		{ID: "slack_webhook", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`https://hooks\.slack\.com/services/`)},
+		{ID: "slack_workflow_webhook", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`https://hooks\.slack\.com/workflows/`)},
+	}
+}
+
+func builtInLanguageSpecificPatterns() []SecretPattern {
+	return []SecretPattern{
 		{ID: "go_secret_assignment", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`(?i)(?:password|secret|token|key|api[_-]?key)\s*=\s*"[a-zA-Z0-9_\-]{8,}"`)},
 		{ID: "go_struct_secret_literal", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`(?i)(?:Password|Secret(?:Key)?|APIKey|ApiKey|Token|AccessKey)\s*:\s*"[^"]{8,}"`)},
 		{ID: "python_env_secret_fallback", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`(?i)os\.environ\.get\(\s*['"][^'"]*(?:secret|key|token|password)[^'"]*['"]\s*,\s*['"][^'"]{8,}['"]\s*\)`)},
@@ -114,6 +147,21 @@ func BuiltInPatterns() []SecretPattern {
 		{ID: "js_authorization_template_literal", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile("(?i)`Authorization`\\s*:\\s*`Bearer\\s+[a-zA-Z0-9_\\-]{20,}`")},
 		{ID: "js_localstorage_secret", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`(?i)localStorage\.setItem\(\s*['"][^'"]*(?:token|password|secret|key)[^'"]*['"]\s*,\s*['"][^'"]{8,}['"]`)},
 		{ID: "js_object_secret_literal", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`(?i)(?:apiKey|api_key|authToken|auth_token|clientSecret|client_secret)\s*:\s*['"][^'"]{16,}['"]`)},
+	}
+}
+
+func builtInKeyMaterialPatterns() []SecretPattern {
+	return []SecretPattern{
+		{ID: "rsa_private_key_pem", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`-----BEGIN\s+RSA\s+PRIVATE\s+KEY-----`)},
+		{ID: "pkcs8_private_key_pem", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`-----BEGIN\s+PRIVATE\s+KEY-----`)},
+		{ID: "openssh_private_key_pem", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`-----BEGIN\s+OPENSSH\s+PRIVATE\s+KEY-----`)},
+		{ID: "ec_private_key_pem", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`-----BEGIN\s+EC\s+PRIVATE\s+KEY-----`)},
+		{ID: "pgp_private_key_pem", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`-----BEGIN\s+PGP\s+PRIVATE\s+KEY\s+BLOCK-----`)},
+	}
+}
+
+func builtInHeuristicPatterns() []SecretPattern {
+	return []SecretPattern{
 		{ID: "hex_secret_64", Severity: SecretSeverityLow, Pattern: regexp.MustCompile(`\b[a-f0-9]{64}\b`)},
 		{ID: "hex_secret_32", Severity: SecretSeverityLow, Pattern: regexp.MustCompile(`\b[a-f0-9]{32}\b`)},
 	}

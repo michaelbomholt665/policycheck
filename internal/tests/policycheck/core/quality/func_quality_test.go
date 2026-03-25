@@ -2,14 +2,44 @@
 package quality_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"policycheck/internal/policycheck/config"
 	"policycheck/internal/policycheck/core/quality"
 	"policycheck/internal/policycheck/types"
+	"policycheck/internal/router"
 )
+
+type mockScannerExtension struct {
+	facts []types.PolicyFact
+	err   error
+}
+
+func (m *mockScannerExtension) Required() bool              { return true }
+func (m *mockScannerExtension) Consumes() []router.PortName { return nil }
+func (m *mockScannerExtension) Provides() []router.PortName {
+	return []router.PortName{router.PortScanner}
+}
+
+func (m *mockScannerExtension) RouterProvideRegistration(reg *router.Registry) error {
+	return reg.RouterRegisterProvider(router.PortScanner, mockScannerProvider{
+		facts: m.facts,
+		err:   m.err,
+	})
+}
+
+type mockScannerProvider struct {
+	facts []types.PolicyFact
+	err   error
+}
+
+func (m mockScannerProvider) RunScanners(ctx context.Context, root string) ([]types.PolicyFact, error) {
+	return m.facts, m.err
+}
 
 func TestEvaluateFunctionQualityFacts(t *testing.T) {
 	cfg := config.PolicyConfig{
@@ -182,4 +212,62 @@ func TestEvaluateFunctionQualityFacts(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCheckFunctionQualityPolicies_RespectsFunctionQualityRoots(t *testing.T) {
+	router.RouterResetForTest()
+	defer router.RouterResetForTest()
+
+	_, err := router.RouterLoadExtensions(nil, []router.Extension{
+		&mockScannerExtension{
+			facts: []types.PolicyFact{
+				{
+					Language:   "go",
+					FilePath:   "internal/app/service.go",
+					SymbolKind: "function",
+					SymbolName: "InternalFunc",
+					LineNumber: 10,
+					EndLine:    20,
+					Complexity: 12,
+				},
+				{
+					Language:   "go",
+					FilePath:   "scripts/tool.go",
+					SymbolKind: "function",
+					SymbolName: "ScriptFunc",
+					LineNumber: 10,
+					EndLine:    20,
+					Complexity: 12,
+				},
+			},
+		},
+	}, context.Background())
+	require.NoError(t, err)
+
+	cfg := config.PolicyConfig{
+		Paths: config.PolicyPathsConfig{
+			FunctionQualityRoots: []string{"internal"},
+		},
+		FunctionQuality: config.PolicyFunctionQualityConfig{
+			EnabledLanguages:        []string{"go"},
+			WarnLOC:                 80,
+			MaxLOC:                  120,
+			GoWarnLOC:               80,
+			GoMaxLOC:                120,
+			WarnParameterCount:      5,
+			MaxParameterCount:       7,
+			MildCTXMin:              10,
+			ElevatedCTXMin:          12,
+			ImmediateRefactorCTXMin: 14,
+			ErrorCTXMin:             15,
+			ErrorCTXAndLOCCTX:       8,
+			ErrorCTXAndLOCLOC:       80,
+			NilGuardRepeatWarnCount: 8,
+		},
+	}
+
+	violations := quality.CheckFunctionQualityPolicies(context.Background(), ".", cfg)
+
+	require.Len(t, violations, 1)
+	assert.Equal(t, "InternalFunc", violations[0].Function)
 }

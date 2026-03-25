@@ -66,4 +66,53 @@ func TestValidatePolicyConfig(t *testing.T) {
 		err := config.ValidatePolicyConfig(&cfg)
 		assert.ErrorContains(t, err, "custom_rules[0] (bad-severity): invalid severity 'fatal', must be 'warn' or 'error'")
 	})
+
+	t.Run("Invalid Scope Guard Mode", func(t *testing.T) {
+		cfg := config.PolicyConfig{}
+		config.ApplyPolicyConfigDefaults(&cfg)
+		cfg.FileSize.MinWarnLOC = 450
+		cfg.FileSize.MinMaxLOC = 650
+		cfg.FileSize.MinWarnToMaxGap = 150
+		cfg.ScopeGuard.Mode = "unsafe"
+
+		err := config.ValidatePolicyConfig(&cfg)
+		assert.ErrorContains(t, err, `scope_guard: invalid mode "unsafe"`)
+	})
+
+	t.Run("Invalid Scope Guard Absolute Prefix", func(t *testing.T) {
+		cfg := config.PolicyConfig{}
+		config.ApplyPolicyConfigDefaults(&cfg)
+		cfg.FileSize.MinWarnLOC = 450
+		cfg.FileSize.MinMaxLOC = 650
+		cfg.FileSize.MinWarnToMaxGap = 150
+		cfg.ScopeGuard.AllowedPathPrefixes = []string{`C:\Windows\System32`}
+
+		err := config.ValidatePolicyConfig(&cfg)
+		assert.ErrorContains(t, err, `scope_guard: allowed_path_prefixes must be repo-relative`)
+	})
+
+	t.Run("Invalid Scope Guard Traversal Prefix", func(t *testing.T) {
+		cfg := config.PolicyConfig{}
+		config.ApplyPolicyConfigDefaults(&cfg)
+		cfg.FileSize.MinWarnLOC = 450
+		cfg.FileSize.MinMaxLOC = 650
+		cfg.FileSize.MinWarnToMaxGap = 150
+		cfg.ScopeGuard.AllowedPathPrefixes = []string{"../internal/adapters/scanners"}
+
+		err := config.ValidatePolicyConfig(&cfg)
+		assert.ErrorContains(t, err, `scope_guard: allowed_path_prefixes must stay within the repository`)
+	})
+
+	t.Run("Valid Scope Guard Prefix Is Normalized", func(t *testing.T) {
+		cfg := config.PolicyConfig{}
+		config.ApplyPolicyConfigDefaults(&cfg)
+		cfg.FileSize.MinWarnLOC = 450
+		cfg.FileSize.MinMaxLOC = 650
+		cfg.FileSize.MinWarnToMaxGap = 150
+		cfg.ScopeGuard.AllowedPathPrefixes = []string{"./internal/adapters/scanners/"}
+
+		err := config.ValidatePolicyConfig(&cfg)
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"internal/adapters/scanners"}, cfg.ScopeGuard.AllowedPathPrefixes)
+	})
 }

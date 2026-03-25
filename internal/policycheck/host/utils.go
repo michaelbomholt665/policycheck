@@ -11,13 +11,10 @@ import (
 // RelOrAbs returns the relative path of path from root, or path if it is already absolute.
 func RelOrAbs(root, path string) (string, error) {
 	if !filepath.IsAbs(path) {
-		return path, nil
+		return utils.NormalizePolicyPath(path), nil
 	}
-	rel, err := filepath.Rel(root, path)
-	if err != nil {
-		return path, err
-	}
-	return filepath.ToSlash(rel), nil
+
+	return utils.ToSlashRel(root, path), nil
 }
 
 // ReadFile reads the named file and returns the contents via the readfile provider.

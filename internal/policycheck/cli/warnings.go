@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"policycheck/internal/policycheck/config"
 	"policycheck/internal/policycheck/types"
@@ -13,8 +14,9 @@ import (
 
 // PrintViolations prints the policy check violations to stdout using the standardized format.
 // Template: [LEVEL] FILE:SYMBOL:LINE: MESSAGE [RULE_ID]
-func PrintViolations(styler capabilities.CLIOutputStyler, violations []types.Violation) {
+func PrintViolations(chrome capabilities.CLIChromeStyler, violations []types.Violation) error {
 	seen := make(map[string]bool)
+	previousGroupKey := ""
 	for _, v := range violations {
 		// Deduplicate: same file, function, line, and rule/message
 		key := fmt.Sprintf("%s:%d:%s:%s:%s", v.File, v.Line, v.Function, v.RuleID, v.Message)
@@ -23,82 +25,79 @@ func PrintViolations(styler capabilities.CLIOutputStyler, violations []types.Vio
 		}
 		seen[key] = true
 
-		// Determine style kind
-		kind := capabilities.TextKindWarning
-		if v.Severity == "error" {
-			kind = capabilities.TextKindError
-		}
-
-		// Get the styled gutter (prefix) from the styler
-		prefix := "[WARN] "
-		if v.Severity == "error" {
-			prefix = "[ERROR] "
-		}
-		if styler != nil {
-			if s, err := styler.StyleText(kind, ""); err == nil {
-				prefix = s
+		currentGroupKey := fmt.Sprintf("%s:%s", v.Severity, v.RuleID)
+		if previousGroupKey != "" && previousGroupKey != currentGroupKey {
+			if _, err := fmt.Fprintln(os.Stdout); err != nil {
+				return fmt.Errorf("write violation group separator: %w", err)
 			}
 		}
 
-		// Prepare context parts (FILE:SYMBOL:LINE)
-		path := filepath.ToSlash(v.File)
-		symbol := v.Function
-		line := v.Line
-
-		// Build context string based on what's available
-		var context string
-		if path != "" {
-			if symbol != "" {
-				context = fmt.Sprintf("%s:%s:%d:", path, symbol, line)
-			} else if line > 0 {
-				context = fmt.Sprintf("%s:%d:", path, line)
-			} else {
-				context = fmt.Sprintf("%s:", path)
-			}
+		if err := printSingleViolation(chrome, v); err != nil {
+			return fmt.Errorf("print violation %s: %w", v.RuleID, err)
 		}
 
-		// Apply muted style to context if styler is available
-		if styler != nil && context != "" {
-			if s, err := styler.StyleText(capabilities.TextKindMuted, context); err == nil {
-				context = s
-			}
+		previousGroupKey = currentGroupKey
+	}
+
+	return nil
+}
+
+func printSingleViolation(chrome capabilities.CLIChromeStyler, v types.Violation) error {
+	prefix, context := buildViolationPrefixAndContext(chrome, v)
+	messageWithRule := fmt.Sprintf("%s [%s]", v.Message, v.RuleID)
+
+	if context != "" {
+		if _, err := fmt.Fprintf(os.Stdout, "%s%s %s\n", prefix, context, messageWithRule); err != nil {
+			return fmt.Errorf("write contextual violation line: %w", err)
 		}
 
-		// Final output: [LEVEL] CONTEXT MESSAGE [RULE_ID]
-		// The message itself is styled with the level's color (HiWhite in prettystyle)
-		messageWithRule := fmt.Sprintf("%s [%s]", v.Message, v.RuleID)
-		if styler != nil {
-			// We pass only the message part to StyleText to get the color, 
-			// but we skip the gutter since we already have it in 'prefix'
-			// This avoids double-prefixing.
-			// Actually, prettystyle's StyleText ALWAYS adds the gutter.
-			// So we should just use StyleText for the whole message part.
-			
-			styledMsg, err := styler.StyleText(kind, messageWithRule)
-			if err == nil {
-				// styledMsg already contains the gutter and the HiWhite message
-				if context != "" {
-					// We need to insert the context AFTER the gutter.
-					// prettystyle gutters are 9 characters (including spaces/codes).
-					// But they are escape-coded, so we can't easily split by index.
-					// However, we know it returns gutter + styledInput.
-					// So if we pass empty string, we get JUST the gutter.
-					gutter, _ := styler.StyleText(kind, "")
-					fmt.Fprintf(os.Stdout, "%s%s %s\n", gutter, context, messageWithRule)
-				} else {
-					fmt.Fprintln(os.Stdout, styledMsg)
-				}
-				continue
-			}
-		}
+		return nil
+	}
 
-		// Fallback for no styler or error
-		if context != "" {
-			fmt.Fprintf(os.Stdout, "%s%s %s\n", prefix, context, messageWithRule)
-		} else {
-			fmt.Fprintf(os.Stdout, "%s%s\n", prefix, messageWithRule)
+	if _, err := fmt.Fprintf(os.Stdout, "%s%s\n", prefix, messageWithRule); err != nil {
+		return fmt.Errorf("write violation line: %w", err)
+	}
+
+	return nil
+}
+
+func buildViolationPrefixAndContext(chrome capabilities.CLIChromeStyler, v types.Violation) (string, string) {
+	kind := capabilities.TextKindWarning
+	if v.Severity == "error" {
+		kind = capabilities.TextKindError
+	}
+
+	prefix := "[WARN] "
+	if v.Severity == "error" {
+		prefix = "[ERROR] "
+	}
+	if chrome != nil {
+		if s, err := chrome.StyleText(kind, ""); err == nil {
+			prefix = s
 		}
 	}
+
+	context := buildViolationContextString(v)
+	if chrome != nil && context != "" {
+		if s, err := chrome.StyleText(capabilities.TextKindMuted, context); err == nil {
+			context = s
+		}
+	}
+	return prefix, context
+}
+
+func buildViolationContextString(v types.Violation) string {
+	path := filepath.ToSlash(v.File)
+	if path == "" {
+		return ""
+	}
+	if v.Function != "" {
+		return fmt.Sprintf("%s:%s:%d:", path, v.Function, v.Line)
+	}
+	if v.Line > 0 {
+		return fmt.Sprintf("%s:%d:", path, v.Line)
+	}
+	return fmt.Sprintf("%s:", path)
 }
 
 // SummarizeWarnings bundles mild warnings consistently across all policy categories
@@ -120,22 +119,77 @@ func SummarizeWarnings(cfg config.PolicyConfig, violations []types.Violation) []
 		}
 	}
 
-	// If there are fewer than the minimum required for summarization,
+	perFileSummaries, remainingMildCTX := summarizePerFileMildCTX(cfg, mildCTX)
+	others = append(others, perFileSummaries...)
+
+	// If there are fewer than the minimum required for global summarization,
 	// restore them back as regular warnings (but use the standard RuleID for output)
-	if len(mildCTX) < cfg.Output.MildCTXSummaryMinFunctions {
-		for i := range mildCTX {
-			mildCTX[i].RuleID = "function-quality"
+	if len(remainingMildCTX) < cfg.Output.MildCTXSummaryMinFunctions {
+		for i := range remainingMildCTX {
+			remainingMildCTX[i].RuleID = "function-quality"
 		}
-		return append(others, mildCTX...)
+		return append(others, remainingMildCTX...)
 	}
 
-	// Bundle them into a single summary line
-	count := len(mildCTX)
-	summary := types.Violation{
+	// Bundle remaining low CTX warnings into a single global summary line
+	count := len(remainingMildCTX)
+	summary := newGlobalMildCTXSummary(cfg, count)
+
+	return append(others, summary)
+}
+
+func summarizePerFileMildCTX(cfg config.PolicyConfig, mildCTX []types.Violation) ([]types.Violation, []types.Violation) {
+	if cfg.Output.MildCTXPerFileSummaryMinCount <= 0 {
+		return nil, mildCTX
+	}
+
+	grouped := make(map[string][]types.Violation)
+	order := make([]string, 0)
+
+	for _, violation := range mildCTX {
+		key := filepath.ToSlash(violation.File)
+		if _, ok := grouped[key]; !ok {
+			order = append(order, key)
+		}
+		grouped[key] = append(grouped[key], violation)
+	}
+
+	sort.Strings(order)
+
+	summaries := make([]types.Violation, 0, len(order))
+	remaining := make([]types.Violation, 0, len(mildCTX))
+
+	for _, key := range order {
+		fileViols := grouped[key]
+		if len(fileViols) < cfg.Output.MildCTXPerFileSummaryMinCount {
+			remaining = append(remaining, fileViols...)
+			continue
+		}
+
+		summaries = append(summaries, newPerFileMildCTXSummary(cfg, key, len(fileViols)))
+	}
+
+	return summaries, remaining
+}
+
+func newGlobalMildCTXSummary(cfg config.PolicyConfig, count int) types.Violation {
+	return types.Violation{
 		RuleID:   "function-quality",
 		Message:  fmt.Sprintf("%d functions have low CTX violations (CTX %d-%d)", count, cfg.FunctionQuality.MildCTXMin, cfg.FunctionQuality.ElevatedCTXMin-1),
 		Severity: "warn",
 	}
+}
 
-	return append(others, summary)
+func newPerFileMildCTXSummary(cfg config.PolicyConfig, file string, count int) types.Violation {
+	message := fmt.Sprintf("%s has %d low CTX violations (CTX %d-%d)", file, count, cfg.FunctionQuality.MildCTXMin, cfg.FunctionQuality.ElevatedCTXMin-1)
+	if cfg.Output.MildCTXPerFileEscalationCount > 0 && count >= cfg.Output.MildCTXPerFileEscalationCount {
+		message = fmt.Sprintf("%s has %d low CTX violations (CTX %d-%d); hotspot threshold is %d", file, count, cfg.FunctionQuality.MildCTXMin, cfg.FunctionQuality.ElevatedCTXMin-1, cfg.Output.MildCTXPerFileEscalationCount)
+	}
+
+	return types.Violation{
+		RuleID:   "function-quality",
+		File:     file,
+		Message:  message,
+		Severity: "warn",
+	}
 }
