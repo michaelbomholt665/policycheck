@@ -1,4 +1,6 @@
 // internal/policycheck/types/types.go
+// Package types contains standard policy types.
+// It defines policy facts and rule violations.
 package types
 
 import "policycheck/internal/ports"

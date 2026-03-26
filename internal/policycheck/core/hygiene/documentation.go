@@ -243,36 +243,42 @@ func locateHeaderPath(
 	cfg config.PolicyConfig,
 ) (headerMatch, []types.Violation) {
 	if cfg.Documentation.Level == "strict" {
-		return locateStrictHeaderPath(lines, rel, lang, startLine, cfg)
+		return locateStrictHeaderPath(headerSearchParams{
+			lines:     lines,
+			rel:       rel,
+			lang:      lang,
+			startLine: startLine,
+			level:     cfg.Documentation.Level,
+		})
 	}
 
-	return locateLooseHeaderPath(lines, rel, lang, startLine, cfg)
+	return locateLooseHeaderPath(headerSearchParams{
+		lines:     lines,
+		rel:       rel,
+		lang:      lang,
+		startLine: startLine,
+		level:     cfg.Documentation.Level,
+	})
 }
 
 // locateStrictHeaderPath expects the path header exactly on the designated start line.
-func locateStrictHeaderPath(
-	lines []string,
-	rel string,
-	lang documentationLanguage,
-	startLine int,
-	cfg config.PolicyConfig,
-) (headerMatch, []types.Violation) {
-	if startLine >= len(lines) {
+func locateStrictHeaderPath(p headerSearchParams) (headerMatch, []types.Violation) {
+	if p.startLine >= len(p.lines) {
 		return headerMatch{lineIndex: -1}, []types.Violation{newDocumentationViolation(
-			rel,
-			startLine+1,
-			lang,
+			p.rel,
+			p.startLine+1,
+			p.lang,
 			documentationViolationSpec{
 				subject:     "file header path is missing",
-				expectation: fmt.Sprintf("expected %q on line %d", rel, startLine+1),
+				expectation: fmt.Sprintf("expected %q on line %d (end of file reached)", p.rel, p.startLine+1),
 			},
-			cfg.Documentation.Level,
+			p.level,
 		)}
 	}
 
-	foundPath := extractHeaderPath(lines[startLine], lang.commentPrefix)
-	if foundPath == rel {
-		return headerMatch{lineIndex: startLine, foundPath: foundPath}, nil
+	foundPath := extractHeaderPath(p.lines[p.startLine], p.lang.commentPrefix)
+	if foundPath == p.rel {
+		return headerMatch{lineIndex: p.startLine, foundPath: foundPath}, nil
 	}
 
 	actualText := ""
@@ -281,46 +287,49 @@ func locateStrictHeaderPath(
 	}
 
 	return headerMatch{lineIndex: -1, foundPath: foundPath}, []types.Violation{newDocumentationViolation(
-		rel,
-		startLine+1,
-		lang,
+		p.rel,
+		p.startLine+1,
+		p.lang,
 		documentationViolationSpec{
 			subject:     "file header path is incorrect",
-			expectation: fmt.Sprintf("expected %q on line %d%s", rel, startLine+1, actualText),
+			expectation: fmt.Sprintf("expected %q on line %d%s", p.rel, p.startLine+1, actualText),
 		},
-		cfg.Documentation.Level,
+		p.level,
 	)}
 }
 
+type headerSearchParams struct {
+	lines     []string
+	rel       string
+	lang      documentationLanguage
+	startLine int
+	level     string
+}
+
 // locateLooseHeaderPath searches for the path header within a sliding window.
-func locateLooseHeaderPath(
-	lines []string,
-	rel string,
-	lang documentationLanguage,
-	startLine int,
-	cfg config.PolicyConfig,
-) (headerMatch, []types.Violation) {
-	maxLine := startLine + headerSearchWindow
-	if maxLine > len(lines) {
-		maxLine = len(lines)
+func locateLooseHeaderPath(p headerSearchParams) (headerMatch, []types.Violation) {
+	maxLine := p.startLine + headerSearchWindow
+	if maxLine > len(p.lines) {
+		maxLine = len(p.lines)
 	}
 
-	for idx := startLine; idx < maxLine; idx++ {
-		foundPath := extractHeaderPath(lines[idx], lang.commentPrefix)
-		if foundPath == rel {
+	for idx := p.startLine; idx < maxLine; idx++ {
+		foundPath := extractHeaderPath(p.lines[idx], p.lang.commentPrefix)
+		if foundPath == p.rel {
 			return headerMatch{lineIndex: idx, foundPath: foundPath}, nil
 		}
 	}
 
 	return headerMatch{lineIndex: -1}, []types.Violation{newDocumentationViolation(
-		rel,
-		startLine+1,
-		lang,
+		p.rel,
+		p.startLine+1,
+		p.lang,
 		documentationViolationSpec{
-			subject:     "file header path is missing",
-			expectation: fmt.Sprintf("expected %q within the first %d header lines", rel, headerSearchWindow),
+			subject:      "file header path is missing",
+			expectation:  fmt.Sprintf("expected %q within the first %d header lines", p.rel, headerSearchWindow),
+			functionName: "",
 		},
-		cfg.Documentation.Level,
+		p.level,
 	)}
 }
 
@@ -424,75 +433,105 @@ func checkGoFunctionDocumentation(
 			return true
 		}
 
-		line := fset.Position(fn.Pos()).Line
-		name := fn.Name.Name
-		if fn.Doc == nil || strings.TrimSpace(fn.Doc.Text()) == "" {
-			viols = append(viols, newDocumentationViolation(
-				rel,
-				line,
-				lang,
-				documentationViolationSpec{
-					subject:      fmt.Sprintf("%s %q is missing documentation", functionSubject(fn), name),
-					expectation:  fmt.Sprintf("expected a doc comment immediately above the %s", functionSubject(fn)),
-					functionName: name,
-				},
-				cfg.Documentation.Level,
-			))
-			return true
+		if fnViols := inspectGoFunction(fn, fset, rel, lang, cfg); len(fnViols) > 0 {
+			viols = append(viols, fnViols...)
 		}
-
-		if cfg.Documentation.Level == "loose" || cfg.Documentation.GoStyle == "presence_only" {
-			return true
-		}
-
-		docText := strings.TrimSpace(fn.Doc.Text())
-		summary := firstNonEmptyLine(docText)
-		if cfg.Documentation.GoStyle == "google" && !strings.HasPrefix(summary, name) {
-			viols = append(viols, newDocumentationViolation(
-				rel,
-				fset.Position(fn.Doc.Pos()).Line,
-				lang,
-				documentationViolationSpec{
-					subject:      fmt.Sprintf("%s %q violates documentation style", functionSubject(fn), name),
-					expectation:  fmt.Sprintf("expected the summary line to start with %q", name),
-					functionName: name,
-				},
-				cfg.Documentation.Level,
-			))
-			return true
-		}
-
-		if floorReason := validateSummaryQuality(summary, name, true); floorReason != "" {
-			viols = append(viols, newDocumentationViolation(
-				rel,
-				fset.Position(fn.Doc.Pos()).Line,
-				lang,
-				documentationViolationSpec{
-					subject:      fmt.Sprintf("%s %q violates documentation style", functionSubject(fn), name),
-					expectation:  floorReason,
-					functionName: name,
-				},
-				cfg.Documentation.Level,
-			))
-			return true
-		}
-
-		if cfg.Documentation.GoStyle == "google" && needsGoBlankSeparator(fn.Doc) {
-			viols = append(viols, newDocumentationViolation(
-				rel,
-				fset.Position(fn.Doc.Pos()).Line,
-				lang,
-				documentationViolationSpec{
-					subject:      fmt.Sprintf("%s %q violates documentation style", functionSubject(fn), name),
-					expectation:  "expected a blank comment separator line before an additional paragraph",
-					functionName: name,
-				},
-				cfg.Documentation.Level,
-			))
-		}
-
 		return true
 	})
+
+	return viols
+}
+
+// inspectGoFunction validates the documentation presence and style for a single Go function.
+func inspectGoFunction(fn *ast.FuncDecl, fset *token.FileSet, rel string, lang documentationLanguage, cfg config.PolicyConfig) []types.Violation {
+	line := fset.Position(fn.Pos()).Line
+	name := fn.Name.Name
+
+	if fn.Doc == nil || strings.TrimSpace(fn.Doc.Text()) == "" {
+		return []types.Violation{newDocumentationViolation(
+			rel,
+			line,
+			lang,
+			documentationViolationSpec{
+				subject:      fmt.Sprintf("%s %q is missing documentation", functionSubject(fn), name),
+				expectation:  fmt.Sprintf("expected a doc comment immediately above the %s", functionSubject(fn)),
+				functionName: name,
+			},
+			cfg.Documentation.Level,
+		)}
+	}
+
+	if cfg.Documentation.Level == "loose" || cfg.Documentation.GoStyle == "presence_only" {
+		return nil
+	}
+
+	return verifyGoFunctionStyle(goStyleParams{
+		fn:      fn,
+		fset:    fset,
+		rel:     rel,
+		lang:    lang,
+		level:   cfg.Documentation.Level,
+		goStyle: cfg.Documentation.GoStyle,
+	})
+}
+
+type goStyleParams struct {
+	fn      *ast.FuncDecl
+	fset    *token.FileSet
+	rel     string
+	lang    documentationLanguage
+	level   string
+	goStyle string
+}
+
+// verifyGoFunctionStyle performs deep style checks for a Go function that has documentation.
+func verifyGoFunctionStyle(p goStyleParams) []types.Violation {
+	var viols []types.Violation
+	name := p.fn.Name.Name
+	docText := strings.TrimSpace(p.fn.Doc.Text())
+	summary := firstNonEmptyLine(docText)
+
+	if p.goStyle == "google" && !strings.HasPrefix(summary, name) {
+		viols = append(viols, newDocumentationViolation(
+			p.rel,
+			p.fset.Position(p.fn.Doc.Pos()).Line,
+			p.lang,
+			documentationViolationSpec{
+				subject:      fmt.Sprintf("%s %q violates documentation style", functionSubject(p.fn), name),
+				expectation:  fmt.Sprintf("expected the summary line to start with %q", name),
+				functionName: name,
+			},
+			p.level,
+		))
+	}
+
+	if floorReason := validateSummaryQuality(summary, name, true); floorReason != "" {
+		viols = append(viols, newDocumentationViolation(
+			p.rel,
+			p.fset.Position(p.fn.Doc.Pos()).Line,
+			p.lang,
+			documentationViolationSpec{
+				subject:      fmt.Sprintf("%s %q violates documentation style", functionSubject(p.fn), name),
+				expectation:  floorReason,
+				functionName: name,
+			},
+			p.level,
+		))
+	}
+
+	if p.goStyle == "google" && needsGoBlankSeparator(p.fn.Doc) {
+		viols = append(viols, newDocumentationViolation(
+			p.rel,
+			p.fset.Position(p.fn.Doc.Pos()).Line,
+			p.lang,
+			documentationViolationSpec{
+				subject:      fmt.Sprintf("%s %q violates documentation style", functionSubject(p.fn), name),
+				expectation:  "expected a blank comment separator line before an additional paragraph",
+				functionName: name,
+			},
+			p.level,
+		))
+	}
 
 	return viols
 }
@@ -755,7 +794,6 @@ func functionSubject(fn *ast.FuncDecl) string {
 	if fn.Recv != nil {
 		return "method"
 	}
-
 	return "function"
 }
 

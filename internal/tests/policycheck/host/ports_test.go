@@ -16,16 +16,26 @@ import (
 
 type mockConfig struct{}
 
-func (m *mockConfig) SetPath(path string)           {}
-func (m *mockConfig) GetRawSource() ([]byte, error) { return nil, nil }
+func (m *mockConfig) SetPath(path string) { /* no-op */ }
+func (m *mockConfig) GetRawSource() ([]byte, error) {
+	// mock config returns nil.
+	return nil, nil
+}
 
 type mockWalk struct{}
 
-func (m *mockWalk) WalkDirectoryTree(root string, walkFn fs.WalkDirFunc) error { return nil }
+func (m *mockWalk) WalkDirectoryTree(root string, walkFn fs.WalkDirFunc) error {
+	// mock walk does nothing.
+	return nil
+}
 
 type mockScanner struct{}
 
 func (m *mockScanner) RunScanners(ctx context.Context, root string) ([]types.PolicyFact, error) {
+	return nil, nil
+}
+
+func (m *mockScanner) ScanFile(ctx context.Context, root, path string) ([]types.PolicyFact, error) {
 	return nil, nil
 }
 

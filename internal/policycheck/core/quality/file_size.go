@@ -46,7 +46,15 @@ func CheckFileSizePolicies(ctx context.Context, root string, cfg config.PolicyCo
 
 	warnCtxFuncs, hardCtxFuncs := calculateComplexityPenalties(facts, cfg)
 
-	fileViols, err := walkAndEvaluateFileSize(root, cfg, walker, warnCtxFuncs, hardCtxFuncs)
+	fCtx := fileSizeContext{
+		root:         root,
+		cfg:          cfg,
+		walk:         walker,
+		warnCtxFuncs: warnCtxFuncs,
+		hardCtxFuncs: hardCtxFuncs,
+	}
+
+	fileViols, err := walkAndEvaluateFileSize(fCtx)
 	if err != nil {
 		viols = appendErrorViol(viols, "file-size", fmt.Sprintf("walk directory: %v", err))
 	}
@@ -74,17 +82,25 @@ type directoryWalker interface {
 	WalkDirectoryTree(root string, fn fs.WalkDirFunc) error
 }
 
+type fileSizeContext struct {
+	root         string
+	cfg          config.PolicyConfig
+	walk         directoryWalker
+	warnCtxFuncs map[string]int
+	hardCtxFuncs map[string]int
+}
+
 // walkAndEvaluateFileSize traverses the directory tree and evaluates each file's size.
-func walkAndEvaluateFileSize(root string, cfg config.PolicyConfig, walk directoryWalker, warnCtxFuncs, hardCtxFuncs map[string]int) ([]types.Violation, error) {
+func walkAndEvaluateFileSize(ctx fileSizeContext) ([]types.Violation, error) {
 	var viols []types.Violation
-	err := walk.WalkDirectoryTree(root, func(path string, d fs.DirEntry, err error) error {
+	err := ctx.walk.WalkDirectoryTree(ctx.root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
 
-		rel, _ := host.RelOrAbs(root, path)
+		rel, _ := host.RelOrAbs(ctx.root, path)
 
-		if !host.HasPrefix(rel, cfg.Paths.FileLOCRoots) || host.HasPrefix(rel, cfg.Paths.LOCIgnorePrefixes) {
+		if !host.HasPrefix(rel, ctx.cfg.Paths.FileLOCRoots) || host.HasPrefix(rel, ctx.cfg.Paths.LOCIgnorePrefixes) {
 			return nil
 		}
 
@@ -94,7 +110,7 @@ func walkAndEvaluateFileSize(root string, cfg config.PolicyConfig, walk director
 		}
 		lineCount := len(strings.Split(string(content), "\n"))
 
-		warnLOC, maxLOC := ComputeFileSizeThresholds(cfg.FileSize, warnCtxFuncs[rel], hardCtxFuncs[rel])
+		warnLOC, maxLOC := ComputeFileSizeThresholds(ctx.cfg.FileSize, ctx.warnCtxFuncs[rel], ctx.hardCtxFuncs[rel])
 		viols = append(viols, EvaluateFileSize(rel, lineCount, warnLOC, maxLOC)...)
 
 		return nil

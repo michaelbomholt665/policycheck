@@ -39,7 +39,13 @@ func TestValidateArchitectureEntry(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			viol, ok := structure.ValidateArchitectureEntry("root", tt.entry, tt.isDir, allowed, ignored, []string{"pkg1", "pkg2"})
+			rule := structure.ArchitectureEntryRule{
+				RulePath:    "root",
+				Allowed:     allowed,
+				Ignored:     ignored,
+				AllowedList: []string{"pkg1", "pkg2"},
+			}
+			viol, ok := structure.ValidateArchitectureEntry(rule, tt.entry, tt.isDir)
 			assert.Equal(t, tt.expected, ok)
 			if tt.expected {
 				assert.NotEmpty(t, viol.Message)

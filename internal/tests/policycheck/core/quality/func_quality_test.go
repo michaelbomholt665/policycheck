@@ -41,6 +41,10 @@ func (m mockScannerProvider) RunScanners(ctx context.Context, root string) ([]ty
 	return m.facts, m.err
 }
 
+func (m mockScannerProvider) ScanFile(ctx context.Context, root, path string) ([]types.PolicyFact, error) {
+	return m.facts, m.err
+}
+
 func TestEvaluateFunctionQualityFacts(t *testing.T) {
 	cfg := config.PolicyConfig{
 		FunctionQuality: config.PolicyFunctionQualityConfig{

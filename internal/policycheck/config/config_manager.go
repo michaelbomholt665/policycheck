@@ -342,50 +342,16 @@ func applyDefaultInt(target *int, def int) {
 
 // ValidatePolicyConfig validates fields and compiles regexes for the configuration.
 func ValidatePolicyConfig(cfg *PolicyConfig) error {
-	// Validate FileSize
-	effectiveMax := cfg.FileSize.MinMaxLOC
-	effectiveWarn := cfg.FileSize.MinWarnLOC
-	gap := cfg.FileSize.MinWarnToMaxGap
-	if effectiveMax < effectiveWarn+gap {
-		return fmt.Errorf("file_size.min_max_loc (%d) must be at least min_warn_loc (%d) + min_warn_to_max_gap (%d)", effectiveMax, effectiveWarn, gap)
+	if err := validateFileSizeConfig(&cfg.FileSize); err != nil {
+		return err
 	}
 
-	totalAllowedPatterns := len(cfg.SecretLogging.AllowedLiteralPatterns) + len(cfg.SecretLogging.Allowlist.LiteralPatterns)
-	cfg.SecretLogging.CompiledAllowedLiteralPatterns = make([]*regexp.Regexp, 0, totalAllowedPatterns)
-
-	// Validate and compile SecretLogging allowed patterns
-	for i, pattern := range cfg.SecretLogging.AllowedLiteralPatterns {
-		compiled, err := regexp.Compile(pattern)
-		if err != nil {
-			return fmt.Errorf("secret_logging.allowed_literal_patterns[%d]: invalid pattern: %w", i, err)
-		}
-		cfg.SecretLogging.CompiledAllowedLiteralPatterns = append(cfg.SecretLogging.CompiledAllowedLiteralPatterns, compiled)
+	if err := compileSecretLoggingPatterns(&cfg.SecretLogging); err != nil {
+		return err
 	}
 
-	for i, pattern := range cfg.SecretLogging.Allowlist.LiteralPatterns {
-		compiled, err := regexp.Compile(pattern)
-		if err != nil {
-			return fmt.Errorf("secret_logging.allowlist.literal_patterns[%d]: invalid pattern: %w", i, err)
-		}
-		cfg.SecretLogging.CompiledAllowedLiteralPatterns = append(cfg.SecretLogging.CompiledAllowedLiteralPatterns, compiled)
-	}
-
-	// Validate and compile CustomRules
-	for i := range cfg.CustomRules {
-		rule := &cfg.CustomRules[i]
-		if !rule.Enabled {
-			continue
-		}
-
-		if rule.Severity != "warn" && rule.Severity != "error" {
-			return fmt.Errorf("custom_rules[%d] (%s): invalid severity '%s', must be 'warn' or 'error'", i, rule.ID, rule.Severity)
-		}
-
-		compiled, err := regexp.Compile(rule.Pattern)
-		if err != nil {
-			return fmt.Errorf("custom_rules[%d] (%s): invalid pattern: %w", i, rule.ID, err)
-		}
-		rule.CompiledPattern = compiled
+	if err := compileCustomRules(cfg.CustomRules); err != nil {
+		return err
 	}
 
 	if err := validateScopeGuardConfig(&cfg.ScopeGuard); err != nil {
@@ -400,6 +366,62 @@ func ValidatePolicyConfig(cfg *PolicyConfig) error {
 		return fmt.Errorf("documentation: %w", err)
 	}
 
+	return nil
+}
+
+// validateFileSizeConfig ensures file size thresholds are numerically consistent.
+func validateFileSizeConfig(cfg *PolicyFileSizeConfig) error {
+	effectiveMax := cfg.MinMaxLOC
+	effectiveWarn := cfg.MinWarnLOC
+	gap := cfg.MinWarnToMaxGap
+	if effectiveMax < effectiveWarn+gap {
+		return fmt.Errorf("file_size.min_max_loc (%d) must be at least min_warn_loc (%d) + min_warn_to_max_gap (%d)", effectiveMax, effectiveWarn, gap)
+	}
+	return nil
+}
+
+// compileSecretLoggingPatterns compiles regexes for both direct and list-based secret allowpatterns.
+func compileSecretLoggingPatterns(cfg *PolicySecretLoggingConfig) error {
+	totalAllowedPatterns := len(cfg.AllowedLiteralPatterns) + len(cfg.Allowlist.LiteralPatterns)
+	cfg.CompiledAllowedLiteralPatterns = make([]*regexp.Regexp, 0, totalAllowedPatterns)
+
+	for i, pattern := range cfg.AllowedLiteralPatterns {
+		compiled, err := regexp.Compile(pattern)
+		if err != nil {
+			return fmt.Errorf("secret_logging.allowed_literal_patterns[%d]: invalid pattern: %w", i, err)
+		}
+		cfg.CompiledAllowedLiteralPatterns = append(cfg.CompiledAllowedLiteralPatterns, compiled)
+	}
+
+	for i, pattern := range cfg.Allowlist.LiteralPatterns {
+		compiled, err := regexp.Compile(pattern)
+		if err != nil {
+			return fmt.Errorf("secret_logging.allowlist.literal_patterns[%d]: invalid pattern: %w", i, err)
+		}
+		cfg.CompiledAllowedLiteralPatterns = append(cfg.CompiledAllowedLiteralPatterns, compiled)
+	}
+
+	return nil
+}
+
+// compileCustomRules compiles regexes for each enabled custom rule.
+func compileCustomRules(rules []PolicyCustomRule) error {
+	for i := range rules {
+		rule := &rules[i]
+		if !rule.Enabled {
+			continue
+		}
+
+		if rule.Severity != "warn" && rule.Severity != "error" {
+			return fmt.Errorf("custom_rules[%d] (%s): invalid severity '%s', must be 'warn' or 'error'", i, rule.ID, rule.Severity)
+		}
+
+		compiled, err := regexp.Compile(rule.Pattern)
+		if err != nil {
+			return fmt.Errorf("custom_rules[%d] (%s): invalid pattern: %w", i, rule.ID, err)
+		}
+		rule.CompiledPattern = compiled
+	}
 	return nil
 }
 

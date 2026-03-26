@@ -1,4 +1,6 @@
 // internal/policycheck/host/utils.go
+// Package host provides host utilities.
+// It offers generic file pathing and generic read functionalities.
 package host
 
 import (

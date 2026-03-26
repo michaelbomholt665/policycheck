@@ -26,6 +26,13 @@ var knownAcronyms = []string{
 	"Http", "Url", "Id", "Json", "Xml", "Dsn", "Api",
 }
 
+type namingContext struct {
+	rel         string
+	fset        *token.FileSet
+	minTokens   int
+	exemptNames []string
+}
+
 // crossBackendDirs are package path segments that indicate a symbol is part of
 // a cross-backend surface and therefore requires the 3-token minimum.
 var crossBackendDirs = []string{
@@ -45,8 +52,9 @@ func CheckSymbolNames(ctx context.Context, root string, cfg config.PolicyConfig)
 
 	for _, scanRoot := range scanRoots {
 		absRoot := filepath.Join(root, scanRoot)
+		sCtx := symbolWalkContext{root: root, cfg: cfg, viols: &viols}
 		walk.WalkDirectoryTree(absRoot, func(path string, d fs.DirEntry, err error) error {
-			return collectSymbolViolations(root, path, d, err, cfg, &viols)
+			return collectSymbolViolations(path, d, err, sCtx)
 		})
 	}
 
@@ -62,24 +70,24 @@ func resolveScanRoots(cfg config.PolicyConfig) []string {
 	return cfg.Paths.ProductionRoots
 }
 
+type symbolWalkContext struct {
+	root  string
+	cfg   config.PolicyConfig
+	viols *[]types.Violation
+}
+
 // collectSymbolViolations is the per-entry callback for the directory walk.
 //
 // It filters non-Go files and excluded paths before delegating to file-level checks.
-func collectSymbolViolations(
-	root, path string,
-	d fs.DirEntry,
-	err error,
-	cfg config.PolicyConfig,
-	viols *[]types.Violation,
-) error {
+func collectSymbolViolations(path string, d fs.DirEntry, err error, ctx symbolWalkContext) error {
 	if err != nil || d.IsDir() || filepath.Ext(path) != ".go" {
 		return nil
 	}
-	rel := utils.ToSlashRel(root, path)
-	if isExcluded(rel, cfg.Hygiene.ExcludePrefixes) {
+	rel := utils.ToSlashRel(ctx.root, path)
+	if isExcluded(rel, ctx.cfg.Hygiene.ExcludePrefixes) {
 		return nil
 	}
-	*viols = append(*viols, checkFileSymbolNames(root, path, cfg)...)
+	*ctx.viols = append(*ctx.viols, checkFileSymbolNames(ctx.root, path, ctx.cfg)...)
 	return nil
 }
 
@@ -113,11 +121,16 @@ func checkFileSymbolNames(root, path string, cfg config.PolicyConfig) []types.Vi
 	}
 
 	rel := utils.ToSlashRel(root, path)
-	minTokens := resolveMinTokens(rel, cfg.Hygiene.MinNameTokens, cfg.Hygiene.CrossBackendMinNameTokens)
+	ctx := namingContext{
+		rel:         rel,
+		fset:        fset,
+		minTokens:   resolveMinTokens(rel, cfg.Hygiene.MinNameTokens, cfg.Hygiene.CrossBackendMinNameTokens),
+		exemptNames: cfg.Hygiene.ExemptFunctionNames,
+	}
 
 	var viols []types.Violation
 	ast.Inspect(f, func(n ast.Node) bool {
-		viols = append(viols, inspectNode(n, rel, fset, minTokens, cfg.Hygiene.ExemptFunctionNames)...)
+		viols = append(viols, inspectNode(n, ctx)...)
 		return true
 	})
 	return viols
@@ -143,30 +156,30 @@ func resolveMinTokens(rel string, configured int, crossBackendConfigured int) in
 }
 
 // inspectNode extracts naming violations from a single AST node.
-func inspectNode(n ast.Node, rel string, fset *token.FileSet, minTokens int, exemptNames []string) []types.Violation {
+func inspectNode(n ast.Node, ctx namingContext) []types.Violation {
 	switch decl := n.(type) {
 	case *ast.FuncDecl:
-		return checkFuncDecl(decl, rel, fset, minTokens, exemptNames)
+		return checkFuncDecl(decl, ctx)
 	case *ast.TypeSpec:
-		return checkTypeSpec(decl, rel, fset, minTokens)
+		return checkTypeSpec(decl, ctx.rel, ctx.fset, ctx.minTokens)
 	case *ast.ValueSpec:
-		return checkValueSpec(decl, rel, fset, minTokens)
+		return checkValueSpec(decl, ctx.rel, ctx.fset, ctx.minTokens)
 	}
 	return nil
 }
 
 // checkFuncDecl validates an exported function declaration.
-func checkFuncDecl(decl *ast.FuncDecl, rel string, fset *token.FileSet, minTokens int, exemptNames []string) []types.Violation {
+func checkFuncDecl(decl *ast.FuncDecl, ctx namingContext) []types.Violation {
 	if decl.Name == nil || !decl.Name.IsExported() {
 		return nil
 	}
 	name := decl.Name.Name
-	for _, exempt := range exemptNames {
+	for _, exempt := range ctx.exemptNames {
 		if name == exempt {
 			return nil
 		}
 	}
-	return validateSymbol(rel, name, minTokens, fset.Position(decl.Pos()).Line)
+	return validateSymbol(ctx.rel, name, ctx.minTokens, ctx.fset.Position(decl.Pos()).Line)
 }
 
 // checkTypeSpec validates an exported type declaration.

@@ -1,4 +1,6 @@
-// Package utils provides common helper functions used across policycheck.
+// internal/policycheck/utils/utils.go
+// Package utils provides common helper functions used across the policycheck codebase.
+// These utilities handle path normalization, pluralization, and AST metadata extraction.
 package utils
 
 import (
@@ -86,6 +88,7 @@ func PluralizeVerb(singular string, count int) string {
 }
 
 // IsGeneratedFile checks if a file contains standard "Code generated" headers.
+//
 // It only checks the first 512 bytes for efficiency.
 func IsGeneratedFile(content []byte) bool {
 	header := string(content)

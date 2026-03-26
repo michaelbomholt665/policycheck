@@ -102,66 +102,7 @@ func (w HeaderWalker) Run(ctx context.Context, dryRun bool, only []string) (Head
 			return nil
 		}
 
-		relPath, err := filepath.Rel(w.Root, path)
-		if err != nil {
-			return fmt.Errorf("rel path %s: %w", path, err)
-		}
-
-		relPath = filepath.ToSlash(relPath)
-		language, ok := supportedHeaderLanguages[strings.ToLower(filepath.Ext(path))]
-		if !ok || !filter[language] || shouldSkipHeaderPath(relPath) {
-			return nil
-		}
-
-		report.Checked++
-
-		raw, err := w.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", path, err)
-		}
-
-		content := string(raw)
-		status, err := InspectHeader(content, language, relPath)
-		if err != nil {
-			return fmt.Errorf("inspect %s: %w", relPath, err)
-		}
-
-		if status.Matches {
-			report.Skipped++
-			return nil
-		}
-
-		updated, err := InjectHeader(content, language, relPath)
-		if err != nil {
-			return fmt.Errorf("inject %s: %w", relPath, err)
-		}
-
-		change := HeaderFileChange{
-			Path:         relPath,
-			Action:       "ADDED",
-			PreviousPath: status.ExistingPath,
-		}
-		if status.Found && status.ExistingPath != "" {
-			change.Action = "STALE"
-		}
-
-		report.Modified++
-		report.Changes = append(report.Changes, change)
-
-		if dryRun {
-			return nil
-		}
-
-		mode, err := w.FileMode(path)
-		if err != nil {
-			return fmt.Errorf("stat %s: %w", path, err)
-		}
-
-		if err := w.WriteFile(path, []byte(updated), mode); err != nil {
-			return fmt.Errorf("write %s: %w", path, err)
-		}
-
-		return nil
+		return w.processHeaderFile(path, filter, dryRun, &report)
 	})
 	if err != nil {
 		return HeaderRunReport{}, err
@@ -172,6 +113,74 @@ func (w HeaderWalker) Run(ctx context.Context, dryRun bool, only []string) (Head
 	}
 
 	return report, nil
+}
+
+// processHeaderFile evaluates and optionally applies headers to a single file.
+func (w HeaderWalker) processHeaderFile(path string, filter map[string]bool, dryRun bool, report *HeaderRunReport) error {
+	relPath, err := filepath.Rel(w.Root, path)
+	if err != nil {
+		return fmt.Errorf("rel path %s: %w", path, err)
+	}
+
+	relPath = filepath.ToSlash(relPath)
+	language, ok := supportedHeaderLanguages[strings.ToLower(filepath.Ext(path))]
+	if !ok || !filter[language] || shouldSkipHeaderPath(relPath) {
+		return nil
+	}
+
+	report.Checked++
+
+	raw, err := w.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+
+	content := string(raw)
+	status, err := InspectHeader(content, language, relPath)
+	if err != nil {
+		return fmt.Errorf("inspect %s: %w", relPath, err)
+	}
+
+	if status.Matches {
+		report.Skipped++
+		return nil
+	}
+
+	updated, err := InjectHeader(content, language, relPath)
+	if err != nil {
+		return fmt.Errorf("inject %s: %w", relPath, err)
+	}
+
+	report.Modified++
+	report.Changes = append(report.Changes, w.buildHeaderChange(relPath, status))
+
+	if dryRun {
+		return nil
+	}
+
+	mode, err := w.FileMode(path)
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", path, err)
+	}
+
+	if err := w.WriteFile(path, []byte(updated), mode); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+
+	return nil
+}
+
+// buildHeaderChange constructs the change record for a modified header.
+func (w HeaderWalker) buildHeaderChange(relPath string, status HeaderStatus) HeaderFileChange {
+	change := HeaderFileChange{
+		Path:         relPath,
+		Action:       "ADDED",
+		PreviousPath: status.ExistingPath,
+	}
+	if status.Found && status.ExistingPath != "" {
+		change.Action = "STALE"
+	}
+	return change
 }
 
 // ResolveRepoRoot returns the nearest repository root marker or startDir when none is found.

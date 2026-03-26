@@ -1,4 +1,6 @@
 // internal/policycheck/core/structure/test_location.go
+// Package structure implements structural consistency policies for Go packages.
+// It verifies package-level test locations.
 package structure
 
 import (

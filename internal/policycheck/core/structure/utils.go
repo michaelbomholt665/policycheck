@@ -1,4 +1,6 @@
 // internal/policycheck/core/structure/utils.go
+// Package structure provides utility functions for the structure package.
+// It aids in determining if path rules apply.
 package structure
 
 import (

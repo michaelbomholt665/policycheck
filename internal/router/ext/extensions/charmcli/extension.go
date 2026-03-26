@@ -2,7 +2,6 @@ package charmcli
 
 import (
 	"fmt"
-	"log"
 
 	"policycheck/internal/router"
 )
@@ -35,6 +34,5 @@ func (e *Extension) RouterProvideRegistration(reg *router.Registry) error {
 		return fmt.Errorf("charmcli extension interaction: %w", err)
 	}
 
-	log.Printf("charmcli extension initialized")
 	return nil
 }

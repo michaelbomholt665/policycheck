@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"policycheck/internal/policycheck/config"
@@ -18,6 +19,11 @@ import (
 	"policycheck/internal/policycheck/host"
 	"policycheck/internal/policycheck/types"
 	"policycheck/internal/router/capabilities"
+)
+
+const (
+	outputModeUser = "user"
+	outputModeAI   = "ai"
 )
 
 // Run executes the policycheck CLI.
@@ -30,9 +36,16 @@ func Run(args []string) int {
 	policyListPtr := fs.Bool("policy-list", false, "List all active policy groups")
 	listRulesPtr := fs.Bool("list-rules", false, "List detailed descriptions of all enforced rules")
 	interactivePtr := fs.Bool("interactive", false, "Browse the policy catalog interactively when the CLI interaction capability is available")
+	userOutputPtr := fs.Bool("user", false, "Render human-oriented CLI output with grouped styling")
+	aiOutputPtr := fs.Bool("ai", false, "Render stable AI-oriented line output")
 
 	if err := fs.Parse(args); err != nil {
 		return HandleError(fmt.Errorf("parse policycheck flags: %w", err))
+	}
+
+	outputMode, err := resolveOutputMode(*userOutputPtr, *aiOutputPtr)
+	if err != nil {
+		return HandleError(err)
 	}
 
 	// 2. Create the command context
@@ -47,7 +60,7 @@ func Run(args []string) int {
 	if *interactivePtr {
 		interactiveErr := RunInteractivePolicyCatalog(renderers)
 		if interactiveErr != nil {
-			return HandleError(fmt.Errorf("run interactive policy catalog: %w", interactiveErr))
+			return HandleStyledError(renderers.Chrome, fmt.Errorf("run interactive policy catalog: %w", interactiveErr))
 		}
 		return 0
 	}
@@ -55,7 +68,7 @@ func Run(args []string) int {
 	if *policyListPtr {
 		policyListErr := PrintPolicyList(renderers)
 		if policyListErr != nil {
-			return HandleError(fmt.Errorf("print policy list: %w", policyListErr))
+			return HandleStyledError(renderers.Chrome, fmt.Errorf("print policy list: %w", policyListErr))
 		}
 		return 0
 	}
@@ -63,7 +76,7 @@ func Run(args []string) int {
 	if *listRulesPtr {
 		ruleDescriptionErr := PrintRuleDescriptions(renderers)
 		if ruleDescriptionErr != nil {
-			return HandleError(fmt.Errorf("print rule descriptions: %w", ruleDescriptionErr))
+			return HandleStyledError(renderers.Chrome, fmt.Errorf("print rule descriptions: %w", ruleDescriptionErr))
 		}
 		return 0
 	}
@@ -71,13 +84,13 @@ func Run(args []string) int {
 	// 5. Load config
 	cfg, err := loadPolicyConfig(*configPtr)
 	if err != nil {
-		return HandleError(err)
+		return HandleStyledError(renderers.Chrome, err)
 	}
 
 	// 6. Run checks
 	absRoot, err := filepath.Abs(*rootPtr)
 	if err != nil {
-		return HandleError(err)
+		return HandleStyledError(renderers.Chrome, err)
 	}
 
 	violations := core.RunPolicyChecks(ctx, absRoot, *cfg)
@@ -86,9 +99,9 @@ func Run(args []string) int {
 	violations = SummarizeWarnings(*cfg, violations)
 
 	// 8. Print results
-	exitCode, processErr := processViolations(renderers, violations)
+	exitCode, processErr := processViolations(renderers, outputMode, violations)
 	if processErr != nil {
-		return HandleError(processErr)
+		return HandleStyledError(renderers.Chrome, processErr)
 	}
 
 	return exitCode
@@ -119,7 +132,7 @@ func loadPolicyConfig(configPath string) (*config.PolicyConfig, error) {
 }
 
 // processViolations handles the display of check results and determines the CLI exit code.
-func processViolations(renderers Renderers, violations []types.Violation) (int, error) {
+func processViolations(renderers Renderers, outputMode string, violations []types.Violation) (int, error) {
 	if len(violations) == 0 {
 		success, err := styleChromeText(renderers.Chrome, capabilities.TextKindSuccess, "policycheck: ok")
 		if err != nil {
@@ -135,7 +148,7 @@ func processViolations(renderers Renderers, violations []types.Violation) (int, 
 
 	violations = ArrangeViolationsForCLI(violations)
 
-	if err := PrintViolations(renderers.Chrome, violations); err != nil {
+	if err := PrintViolations(renderers.Chrome, outputMode, violations); err != nil {
 		return 1, fmt.Errorf("print violations: %w", err)
 	}
 
@@ -147,6 +160,25 @@ func processViolations(renderers Renderers, violations []types.Violation) (int, 
 	}
 
 	return 0, nil
+}
+
+// resolveOutputMode validates the explicit CLI output-mode flags.
+func resolveOutputMode(userOutput bool, aiOutput bool) (string, error) {
+	switch {
+	case userOutput && aiOutput:
+		return "", fmt.Errorf("select either --user or --ai, not both")
+	case userOutput:
+		return outputModeUser, nil
+	case aiOutput:
+		return outputModeAI, nil
+	default:
+		return outputModeAI, nil
+	}
+}
+
+// formatRuleLabel normalizes a rule label for terminal rendering.
+func formatRuleLabel(ruleID string) string {
+	return strings.TrimSpace(ruleID)
 }
 
 // ArrangeViolationsForCLI returns a sorted copy of violations for stable CLI grouping.

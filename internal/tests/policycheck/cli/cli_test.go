@@ -151,7 +151,7 @@ func TestResolveRenderers_MissingOptionalCapabilities(t *testing.T) {
 
 func TestPrintViolations_UsesChromeStyling(t *testing.T) {
 	stdout, _ := captureOutput(t, func() {
-		err := policycli.PrintViolations(&stubChromeStyler{}, []types.Violation{{
+		err := policycli.PrintViolations(&stubChromeStyler{}, "ai", []types.Violation{{
 			RuleID:   "function-quality",
 			File:     "internal/policycheck/cli/rules.go",
 			Function: "RunPolicy",
@@ -188,7 +188,7 @@ func TestArrangeViolationsForCLI_GroupsSeverityAndRule(t *testing.T) {
 
 func TestPrintViolations_InsertsSeparatorBetweenGroups(t *testing.T) {
 	stdout, _ := captureOutput(t, func() {
-		err := policycli.PrintViolations(&stubChromeStyler{}, []types.Violation{
+		err := policycli.PrintViolations(&stubChromeStyler{}, "ai", []types.Violation{
 			{RuleID: "go-version", File: "go.mod", Line: 1, Message: "missing toolchain", Severity: "error"},
 			{RuleID: "function-quality", File: "a.go", Line: 2, Message: "too complex", Severity: "warn"},
 		})
@@ -196,6 +196,22 @@ func TestPrintViolations_InsertsSeparatorBetweenGroups(t *testing.T) {
 	})
 
 	assert.Contains(t, stdout, "missing toolchain [go-version]\n\n[WARN] ")
+}
+
+func TestPrintViolations_UserMode_GroupsByFile(t *testing.T) {
+	stdout, _ := captureOutput(t, func() {
+		err := policycli.PrintViolations(&stubChromeStyler{}, "user", []types.Violation{
+			{RuleID: "hygiene.documentation", File: "internal/policycheck/core/structure/router_imports.go", Line: 19, Message: "violates documentation style", Severity: "error"},
+			{RuleID: "function-quality", File: "internal/adapters/cliwrapper/format_headers.go", Line: 46, Message: "too many parameters (5)", Severity: "warn"},
+		})
+		require.NoError(t, err)
+	})
+
+	assert.Contains(t, stdout, "Policycheck Report  1 error(s)  1 warning(s)  2 file(s)")
+	assert.Contains(t, stdout, "<header>internal/policycheck/core/structure/router_imports.go</header>")
+	assert.Contains(t, stdout, "<error>  - Line 19: violates documentation style</error>")
+	assert.Contains(t, stdout, "    <muted>[hygiene.documentation]</muted>")
+	assert.Contains(t, stdout, "<header>internal/adapters/cliwrapper/format_headers.go</header>")
 }
 
 func TestSummarizeWarnings_CompressesMildContextWarnings(t *testing.T) {

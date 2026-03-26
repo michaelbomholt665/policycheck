@@ -1,4 +1,6 @@
 // internal/policycheck/host/ports.go
+// Package host interfaces with router host ports.
+// It resolves system capabilities such as configuration and IO.
 package host
 
 import (

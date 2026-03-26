@@ -1,4 +1,6 @@
 // internal/policycheck/core/structure/package_rules.go
+// Package structure implements structural consistency policies for Go packages.
+// It verifies package-level documentation, file counts, and architecture concerns.
 package structure
 
 import (
@@ -43,6 +45,7 @@ func CheckPackageRules(ctx context.Context, root string, cfg config.PolicyConfig
 	return ValidatePackageStats(stats, cfg.PackageRules)
 }
 
+// createWalkFn returns a fs.WalkDirFunc that collects package statistics.
 func createWalkFn(root string, stats map[string]*PackageStats, cfg config.PolicyPackageRulesConfig) fs.WalkDirFunc {
 	return func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || filepath.Ext(path) != ".go" {
@@ -79,6 +82,7 @@ func createWalkFn(root string, stats map[string]*PackageStats, cfg config.Policy
 	}
 }
 
+// isPackageRulesExcluded determines whether a directory should be skipped.
 func isPackageRulesExcluded(dir string, prefixes []string) bool {
 	if strings.HasPrefix(dir, "cmd/policycheck") || strings.HasPrefix(dir, "internal/policycheck") {
 		return true
@@ -87,6 +91,7 @@ func isPackageRulesExcluded(dir string, prefixes []string) bool {
 	return host.HasPrefix(dir, prefixes)
 }
 
+// populateDocStats reads the file content and evaluates the doc.go requirements.
 func populateDocStats(st *PackageStats, path string) {
 	contentBytes, err := host.ReadFile(path)
 	if err != nil {
@@ -97,6 +102,7 @@ func populateDocStats(st *PackageStats, path string) {
 	st.DocPrefixOK = checkDocPrefix(content)
 }
 
+// checkDocPrefix verifies that the doc.go file starts with the required Package comment.
 func checkDocPrefix(content string) bool {
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
@@ -162,69 +168,82 @@ func ValidatePackageStats(stats map[string]*PackageStats, cfg config.PolicyPacka
 
 	for _, dir := range dirs {
 		st := stats[dir]
-		if st.ProductionGo == 0 {
-			continue
-		}
-
-		if st.ProductionGo == 1 {
-			violations = append(violations, types.Violation{
-				RuleID:   "structure.package_rules",
-				File:     dir,
-				Message:  "package contains exactly 1 non-doc file; consider consolidating with another package",
-				Severity: "warn",
-			})
-		}
-
-		if st.ProductionGo > cfg.MaxProductionFiles {
-			violations = append(violations, types.Violation{
-				RuleID:   "structure.package_rules",
-				File:     dir,
-				Message:  fmt.Sprintf("package has %d production .go files; max is %d + doc.go (split into sub-packages)", st.ProductionGo, cfg.MaxProductionFiles),
-				Severity: "error",
-			})
-		}
-
-		if !st.HasDoc {
-			violations = append(violations, types.Violation{
-				RuleID:   "structure.package_rules",
-				File:     dir,
-				Message:  "missing required doc.go package documentation file",
-				Severity: "error",
-			})
-			continue
-		}
-
-		if !st.DocPrefixOK {
-			violations = append(violations, types.Violation{
-				RuleID:   "structure.package_rules",
-				File:     st.DocPath,
-				Message:  "doc.go must start with `// Package <name> <Description>` with capital first letter of Description",
-				Severity: "error",
-			})
-		}
-
-		if !st.HasConcerns {
-			violations = append(violations, types.Violation{
-				RuleID:   "structure.package_rules",
-				File:     st.DocPath,
-				Message:  "doc.go must contain `Package Concerns:` section with concern bullets",
-				Severity: "error",
-			})
-		} else if st.ConcernCount < cfg.MinConcerns {
-			violations = append(violations, types.Violation{
-				RuleID:   "structure.package_rules",
-				File:     st.DocPath,
-				Message:  fmt.Sprintf("doc.go `Package Concerns:` section must include at least %d bullet", cfg.MinConcerns),
-				Severity: "error",
-			})
-		} else if st.ConcernCount > cfg.MaxConcerns {
-			violations = append(violations, types.Violation{
-				RuleID:   "structure.package_rules",
-				File:     st.DocPath,
-				Message:  fmt.Sprintf("doc.go declares %d package concerns; max is %d", st.ConcernCount, cfg.MaxConcerns),
-				Severity: "error",
-			})
-		}
+		violations = append(violations, validateSinglePackage(dir, st, cfg)...)
 	}
+	return violations
+}
+
+// validateSinglePackage evaluates the statistics of a single package against policy thresholds.
+func validateSinglePackage(dir string, st *PackageStats, cfg config.PolicyPackageRulesConfig) []types.Violation {
+	if st.ProductionGo == 0 {
+		return nil
+	}
+
+	var violations []types.Violation
+	if st.ProductionGo == 1 {
+		violations = append(violations, types.Violation{
+			RuleID:   "structure.package_rules",
+			File:     dir,
+			Message:  "package contains exactly 1 non-doc file; consider consolidating with another package",
+			Severity: "warn",
+		})
+	}
+
+	if st.ProductionGo > cfg.MaxProductionFiles {
+		violations = append(violations, types.Violation{
+			RuleID:   "structure.package_rules",
+			File:     dir,
+			Message:  fmt.Sprintf("package has %d production .go files; max is %d + doc.go (split into sub-packages)", st.ProductionGo, cfg.MaxProductionFiles),
+			Severity: "error",
+		})
+	}
+
+	if !st.HasDoc {
+		return append(violations, types.Violation{
+			RuleID:   "structure.package_rules",
+			File:     dir,
+			Message:  "missing required doc.go package documentation file",
+			Severity: "error",
+		})
+	}
+
+	return append(violations, validatePackageDocumentation(st, cfg)...)
+}
+
+// validatePackageDocumentation checks doc.go prefix and concerns.
+func validatePackageDocumentation(st *PackageStats, cfg config.PolicyPackageRulesConfig) []types.Violation {
+	var violations []types.Violation
+	if !st.DocPrefixOK {
+		violations = append(violations, types.Violation{
+			RuleID:   "structure.package_rules",
+			File:     st.DocPath,
+			Message:  "doc.go must start with `// Package <name> <Description>` with capital first letter of Description",
+			Severity: "error",
+		})
+	}
+
+	if !st.HasConcerns {
+		violations = append(violations, types.Violation{
+			RuleID:   "structure.package_rules",
+			File:     st.DocPath,
+			Message:  "doc.go must contain `Package Concerns:` section with concern bullets",
+			Severity: "error",
+		})
+	} else if st.ConcernCount < cfg.MinConcerns {
+		violations = append(violations, types.Violation{
+			RuleID:   "structure.package_rules",
+			File:     st.DocPath,
+			Message:  fmt.Sprintf("doc.go `Package Concerns:` section must include at least %d bullet", cfg.MinConcerns),
+			Severity: "error",
+		})
+	} else if st.ConcernCount > cfg.MaxConcerns {
+		violations = append(violations, types.Violation{
+			RuleID:   "structure.package_rules",
+			File:     st.DocPath,
+			Message:  fmt.Sprintf("doc.go declares %d package concerns; max is %d", st.ConcernCount, cfg.MaxConcerns),
+			Severity: "error",
+		})
+	}
+
 	return violations
 }

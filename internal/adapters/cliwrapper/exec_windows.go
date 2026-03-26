@@ -7,7 +7,10 @@ import (
 	"os/exec"
 )
 
-func configureManagedCommand(_ *exec.Cmd) {}
+func configureManagedCommand(_ *exec.Cmd) {
+	// Managed command configuration is a no-op on Windows.
+	// Windows process groups (job objects) are handled differently than POSIX pgids.
+}
 
 func terminateManagedCommand(cmd *exec.Cmd) error {
 	if cmd == nil || cmd.Process == nil {

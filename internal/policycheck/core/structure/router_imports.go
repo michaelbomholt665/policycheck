@@ -1,4 +1,6 @@
+// internal/policycheck/core/structure/router_imports.go
 // Package structure provides structural policy checks for the repository.
+// It includes rules for router imports, package boundaries, and file locations.
 package structure
 
 import (
@@ -17,6 +19,7 @@ import (
 )
 
 // CheckRouterImports enforces the router import architecture.
+//
 // It detects illegal imports across business, adapter, and router core packages.
 func CheckRouterImports(ctx context.Context, root string, cfg config.PolicyConfig) []types.Violation {
 	if !cfg.RouterImports.Enabled {
@@ -59,6 +62,7 @@ func CheckRouterImports(ctx context.Context, root string, cfg config.PolicyConfi
 	return viols
 }
 
+// isException returns true if the relative path matches any of the given exceptions.
 func isException(rel string, exceptions []string) bool {
 	for _, ex := range exceptions {
 		if strings.HasPrefix(rel, ex) {
@@ -68,6 +72,7 @@ func isException(rel string, exceptions []string) bool {
 	return false
 }
 
+// checkFileRouterImports scans a single Go file for router import violations.
 func checkFileRouterImports(root, path string, cfg config.PolicyConfig) []types.Violation {
 	content, err := host.ReadFile(path)
 	if err != nil {
@@ -95,6 +100,7 @@ func checkFileRouterImports(root, path string, cfg config.PolicyConfig) []types.
 	return viols
 }
 
+// validateImport checks if a specific import path is allowed for the source file.
 func validateImport(rel, importPath string, line int, cfg config.PolicyConfig) *types.Violation {
 	// Classify the source file
 	isRouterBoot := isUnder(rel, cfg.RouterImports.RouterBootRoots)
@@ -123,6 +129,7 @@ func validateImport(rel, importPath string, line int, cfg config.PolicyConfig) *
 	return nil
 }
 
+// validateBusinessImport ensures business packages do not import forbidden prefixes.
 func validateBusinessImport(rel, importPath string, line int, cfg config.PolicyConfig) *types.Violation {
 	for _, forbidden := range cfg.RouterImports.ForbiddenBusinessImportPrefixes {
 		if strings.HasPrefix(importPath, forbidden) {
@@ -138,6 +145,7 @@ func validateBusinessImport(rel, importPath string, line int, cfg config.PolicyC
 	return nil
 }
 
+// validateAdapterImport prevents adapter-to-adapter imports if configured.
 func validateAdapterImport(rel, importPath string, line int, cfg config.PolicyConfig) *types.Violation {
 	if !isAdapterImport(importPath, cfg.RouterImports.AdapterRoots) {
 		return nil
@@ -160,6 +168,7 @@ func validateAdapterImport(rel, importPath string, line int, cfg config.PolicyCo
 	return nil
 }
 
+// validateRouterCoreImport ensures router core stays blind to adapters and business logic.
 func validateRouterCoreImport(rel, importPath string, line int, cfg config.PolicyConfig) *types.Violation {
 	if isAdapterImport(importPath, cfg.RouterImports.AdapterRoots) {
 		return &types.Violation{
@@ -182,10 +191,12 @@ func validateRouterCoreImport(rel, importPath string, line int, cfg config.Polic
 	return nil
 }
 
+// isUnder returns true if the relative path is under any of the given roots.
 func isUnder(rel string, roots []string) bool {
 	return utils.HasPrefix(rel, roots)
 }
 
+// isAdapterImport returns true if the import path refers to an adapter package.
 func isAdapterImport(importPath string, adapterRoots []string) bool {
 	for _, root := range adapterRoots {
 		// Module prefix + root
@@ -197,6 +208,7 @@ func isAdapterImport(importPath string, adapterRoots []string) bool {
 	return false
 }
 
+// isBusinessImport returns true if the import path refers to a business package.
 func isBusinessImport(importPath string, businessRoots []string) bool {
 	for _, root := range businessRoots {
 		prefix := "policycheck/" + root

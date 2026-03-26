@@ -2,7 +2,6 @@ package prettystyle
 
 import (
 	"fmt"
-	"log"
 
 	"policycheck/internal/router"
 )
@@ -32,6 +31,5 @@ func (e *Extension) RouterProvideRegistration(reg *router.Registry) error {
 		return fmt.Errorf("prettystyle extension: %w", err)
 	}
 
-	log.Printf("prettystyle extension initialized")
 	return nil
 }

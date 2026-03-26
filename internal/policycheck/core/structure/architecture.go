@@ -1,4 +1,7 @@
 // internal/policycheck/core/structure/architecture.go
+// Package structure implements the directory and import relationship validation.
+// It enforces rules about allowed children in specific roots and ensures
+// that internal packages do not import from the cmd/ directory.
 package structure
 
 import (
@@ -17,6 +20,8 @@ import (
 )
 
 // CheckArchitecture validates configured directory structure rules.
+//
+// It checks both root-level child allowance and cross-module import directionality.
 func CheckArchitecture(ctx context.Context, root string, cfg config.PolicyConfig) []types.Violation {
 	if !cfg.Architecture.Enforce {
 		return nil
@@ -33,6 +38,7 @@ func CheckArchitecture(ctx context.Context, root string, cfg config.PolicyConfig
 	return violations
 }
 
+// checkImportDirectionality scans internal directories for forbidden imports.
 func checkImportDirectionality(root string) []types.Violation {
 	walk, err := host.ResolveWalkProvider()
 	if err != nil {
@@ -57,6 +63,7 @@ func checkImportDirectionality(root string) []types.Violation {
 	return violations
 }
 
+// checkFileImportDirectionality validates that a single file does not import from cmd/.
 func checkFileImportDirectionality(path, rel string) []types.Violation {
 	content, err := host.ReadFile(path)
 	if err != nil {
@@ -88,6 +95,7 @@ func checkFileImportDirectionality(path, rel string) []types.Violation {
 	return violations
 }
 
+// checkArchitectureRoot validates the children of a specific root directory.
 func checkArchitectureRoot(root string, rule config.PolicyArchitectureRoot) []types.Violation {
 	base := filepath.Join(root, filepath.FromSlash(rule.Path))
 	entries, err := os.ReadDir(base)
@@ -98,11 +106,11 @@ func checkArchitectureRoot(root string, rule config.PolicyArchitectureRoot) []ty
 	allowed := BuildNameSet(rule.AllowedChildren)
 	ignored := BuildNameSet(rule.IgnoreChildren)
 	violations := []types.Violation{}
-	entryRule := architectureEntryRule{
-		rulePath:    rule.Path,
-		allowed:     allowed,
-		ignored:     ignored,
-		allowedList: rule.AllowedChildren,
+	entryRule := ArchitectureEntryRule{
+		RulePath:    rule.Path,
+		Allowed:     allowed,
+		Ignored:     ignored,
+		AllowedList: rule.AllowedChildren,
 	}
 	for _, entry := range entries {
 		if viol, ok := validateArchitectureEntry(entryRule, entry.Name(), entry.IsDir()); ok {
@@ -135,49 +143,45 @@ func BuildNameSet(names []string) map[string]struct{} {
 	return items
 }
 
-type architectureEntryRule struct {
-	rulePath    string
-	allowed     map[string]struct{}
-	ignored     map[string]struct{}
-	allowedList []string
+// ArchitectureEntryRule defines the allowance rules for a specific directory path.
+type ArchitectureEntryRule struct {
+	// RulePath is the relative path from the root being validated.
+	RulePath string
+	// Allowed is the set of directory names permitted as children.
+	Allowed map[string]struct{}
+	// Ignored is the set of file or directory names to skip validation for.
+	Ignored map[string]struct{}
+	// AllowedList is the original slice of allowed names for interpolation in error messages.
+	AllowedList []string
 }
 
 // ValidateArchitectureEntry validates a single top-level directory entry against a root rule.
-func ValidateArchitectureEntry(
-	rulePath, name string,
-	isDir bool,
-	allowed map[string]struct{},
-	ignored map[string]struct{},
-	allowedList []string,
-) (types.Violation, bool) {
-	return validateArchitectureEntry(architectureEntryRule{
-		rulePath:    rulePath,
-		allowed:     allowed,
-		ignored:     ignored,
-		allowedList: allowedList,
-	}, name, isDir)
+func ValidateArchitectureEntry(rule ArchitectureEntryRule, name string, isDir bool) (types.Violation, bool) {
+	return validateArchitectureEntry(rule, name, isDir)
 }
 
-func validateArchitectureEntry(rule architectureEntryRule, name string, isDir bool) (types.Violation, bool) {
+// validateArchitectureEntry performs the internal check for a directory entry violation.
+func validateArchitectureEntry(rule ArchitectureEntryRule, name string, isDir bool) (types.Violation, bool) {
 	if !isDir {
 		return types.Violation{}, false
 	}
 
-	if _, ok := rule.ignored[name]; ok {
+	if _, ok := rule.Ignored[name]; ok {
 		return types.Violation{}, false
 	}
-	if _, ok := rule.allowed[name]; ok {
+	if _, ok := rule.Allowed[name]; ok {
 		return types.Violation{}, false
 	}
 
 	return types.Violation{
 		RuleID:   "structure.architecture",
-		File:     filepath.ToSlash(filepath.Join(rule.rulePath, name)),
-		Message:  fmt.Sprintf("top-level directory is not allowed under %s; allowed children: %s", filepath.ToSlash(rule.rulePath), strings.Join(rule.allowedList, ", ")),
+		File:     filepath.ToSlash(filepath.Join(rule.RulePath, name)),
+		Message:  fmt.Sprintf("top-level directory is not allowed under %s; allowed children: %s", filepath.ToSlash(rule.RulePath), strings.Join(rule.AllowedList, ", ")),
 		Severity: "error",
 	}, true
 }
 
+// checkArchitectureConcerns ensures all defined architectural concerns are valid.
 func checkArchitectureConcerns(root string, concerns []config.PolicyArchitectureTopic) []types.Violation {
 	var violations []types.Violation
 
@@ -188,6 +192,7 @@ func checkArchitectureConcerns(root string, concerns []config.PolicyArchitecture
 	return violations
 }
 
+// validateArchitectureConcern validates a single architectural concern and its required properties.
 func validateArchitectureConcern(root string, concern config.PolicyArchitectureTopic) []types.Violation {
 	var violations []types.Violation
 
@@ -218,6 +223,7 @@ func validateArchitectureConcern(root string, concern config.PolicyArchitectureT
 	return violations
 }
 
+// validateConcernPaths verifies that all paths referenced in a concern exist on disk.
 func validateConcernPaths(root, concernName, fieldName string, paths []string) []types.Violation {
 	var violations []types.Violation
 

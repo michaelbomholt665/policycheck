@@ -6,6 +6,8 @@ package cli
 import (
 	"fmt"
 	"os"
+
+	"policycheck/internal/router/capabilities"
 )
 
 // HandleError prints an error message to stderr and returns the appropriate exit code.
@@ -15,5 +17,21 @@ func HandleError(err error) int {
 	}
 
 	fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	return 1
+}
+
+// HandleStyledError prints an error message to stderr using the resolved chrome styler.
+func HandleStyledError(chrome capabilities.CLIChromeStyler, err error) int {
+	if err == nil {
+		return 0
+	}
+
+	message := fmt.Sprintf("error: %v", err)
+	styled, styleErr := styleChromeText(chrome, capabilities.TextKindError, message)
+	if styleErr != nil {
+		styled = message
+	}
+
+	fmt.Fprintln(os.Stderr, styled)
 	return 1
 }
