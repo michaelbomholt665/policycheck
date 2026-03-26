@@ -16,7 +16,6 @@ import (
 	"policycheck/internal/policycheck/host"
 	"policycheck/internal/policycheck/types"
 	"policycheck/internal/router/capabilities"
-	"policycheck/internal/router/ext"
 )
 
 // Run executes the policycheck CLI.
@@ -34,20 +33,14 @@ func Run(args []string) int {
 		return HandleError(fmt.Errorf("parse policycheck flags: %w", err))
 	}
 
-	// 2. Boot the router
+	// 2. Create the command context
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-
-	warnings, err := ext.RouterBootExtensions(ctx)
-	if err != nil {
-		return HandleError(fmt.Errorf("router boot: %w", err))
-	}
 
 	renderers, err := ResolveRenderers()
 	if err != nil {
 		return HandleError(err)
 	}
-	printRouterWarnings(renderers.Chrome, warnings)
 
 	if *interactivePtr {
 		interactiveErr := RunInteractivePolicyCatalog(renderers)

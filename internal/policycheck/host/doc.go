@@ -2,5 +2,4 @@
 //
 // Package Concerns:
 // - Resolving capability providers (Config, ReadFile, Scanner).
-// - Bootstrapping the policy environment.
 package host

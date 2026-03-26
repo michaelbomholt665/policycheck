@@ -72,6 +72,8 @@ type WrapperMacroConfig struct {
 	Name string `toml:"name"`
 	// Steps is the ordered list of shell commands the macro expands to.
 	Steps []string `toml:"steps"`
+	// OnFailure controls whether the macro halts or continues after a failed step.
+	OnFailure string `toml:"on_failure"`
 }
 
 // WrapperUIConfig controls output rendering for the wrapper subsystem.
@@ -124,6 +126,10 @@ func validateMacroShape(idx int, m WrapperMacroConfig) error {
 
 	if len(m.Steps) == 0 {
 		return fmt.Errorf("validate wrapper config: macros[%d] %q: steps must not be empty", idx, m.Name)
+	}
+
+	if _, err := NormalizeMacroOnFailure(m.OnFailure); err != nil {
+		return fmt.Errorf("validate wrapper config: macros[%d] %q: %w", idx, m.Name, err)
 	}
 
 	return nil

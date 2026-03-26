@@ -58,27 +58,3 @@ func TestSecurityGatePlaceholder_CheckLockfile_ReturnsNotImplementedError(t *tes
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cli wrapper security gate placeholder")
 }
-
-// TestMacroRunnerPlaceholder_RunMacro_ReturnsNotImplementedError verifies the
-// placeholder macro runner returns a wrapper-context error.
-func TestMacroRunnerPlaceholder_RunMacro_ReturnsNotImplementedError(t *testing.T) {
-	t.Parallel()
-
-	var p ports.CLIWrapperMacroRunner = cliwrapper.NewMacroRunnerPlaceholder()
-	err := p.RunMacro(context.Background(), "")
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cli wrapper macro runner placeholder")
-}
-
-// TestFormatterPlaceholder_FormatHeaders_ReturnsNotImplementedError verifies the
-// placeholder formatter returns a wrapper-context error.
-func TestFormatterPlaceholder_FormatHeaders_ReturnsNotImplementedError(t *testing.T) {
-	t.Parallel()
-
-	var p ports.CLIWrapperFormatter = cliwrapper.NewFormatterPlaceholder()
-	err := p.FormatHeaders(context.Background(), false, []string{})
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cli wrapper formatter placeholder")
-}

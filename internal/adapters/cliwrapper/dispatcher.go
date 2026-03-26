@@ -21,6 +21,7 @@ type WrapperDispatcher struct {
 	detector             WrapperDetector
 	cfg                  WrapperConfig
 	exec                 ExecFunc
+	loadConfig           func() (WrapperConfig, error)
 	securityGateResolver func() (ports.CLIWrapperSecurityGate, error)
 	macroRunnerResolver  func() (ports.CLIWrapperMacroRunner, error)
 	formatterResolver    func() (ports.CLIWrapperFormatter, error)
@@ -44,6 +45,7 @@ func NewWrapperDispatcher(cfg WrapperConfig, exec ExecFunc) *WrapperDispatcher {
 		detector:             WrapperDetector{},
 		cfg:                  cfg,
 		exec:                 exec,
+		loadConfig:           staticWrapperConfigLoader(cfg),
 		securityGateResolver: resolveSecurityGate,
 		macroRunnerResolver:  resolveMacroRunner,
 		formatterResolver:    resolveFormatter,
@@ -92,7 +94,12 @@ func NewWrapperDispatcherWithResolvers(
 //  3. ModePassthrough — forward args directly to exec.
 //  4. Other modes — return ErrNotImplemented with wrapper context.
 func (d *WrapperDispatcher) Dispatch(ctx context.Context, args []string) error {
-	macroNames := collectMacroNames(d.cfg)
+	cfg, err := d.loadConfig()
+	if err != nil {
+		return fmt.Errorf("dispatcher: load config: %w", err)
+	}
+
+	macroNames := collectMacroNames(cfg)
 	mode := d.detector.Detect(args, macroNames)
 
 	switch mode {
@@ -109,6 +116,16 @@ func (d *WrapperDispatcher) Dispatch(ctx context.Context, args []string) error {
 	default:
 		return fmt.Errorf("dispatcher: mode %v not yet implemented: %w", mode, errNotImplemented)
 	}
+}
+
+func staticWrapperConfigLoader(cfg WrapperConfig) func() (WrapperConfig, error) {
+	return func() (WrapperConfig, error) {
+		return cfg, nil
+	}
+}
+
+func loadActiveDispatcherConfig() (WrapperConfig, error) {
+	return loadActiveAdapterConfig()
 }
 
 // dispatchPackageGate runs parse → pre-scan → exec for package-install commands.

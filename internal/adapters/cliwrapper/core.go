@@ -52,8 +52,9 @@ type WrapperSecurityConfig struct {
 
 // WrapperMacroConfig describes a registered wrapper macro.
 type WrapperMacroConfig struct {
-	Name  string
-	Steps []string
+	Name      string
+	Steps     []string
+	OnFailure string
 }
 
 // WrapperConfig is the adapter-local wrapper config schema.

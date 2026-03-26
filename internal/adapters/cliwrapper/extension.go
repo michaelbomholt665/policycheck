@@ -11,15 +11,14 @@ const defaultSecurityThreshold = SeverityHigh
 
 // Extension implements router.Extension for the CLI wrapper subsystem.
 //
-// The dispatcher and security-gate ports are backed by real implementations.
-// MacroRunner and Formatter remain placeholder registrations until their
-// respective TDD phases are complete.
+// All wrapper ports are backed by real adapters. Cross-capability dependencies
+// such as repository walking are resolved at runtime through the router boundary.
 type Extension struct{}
 
 // Required returns false — wrapper adapters degrade gracefully during development.
 func (e *Extension) Required() bool { return false }
 
-// Consumes returns nil — no boot-time dependencies.
+// Consumes returns nil because wrapper cross-capability dependencies are resolved at runtime.
 func (e *Extension) Consumes() []router.PortName { return nil }
 
 // Provides returns the four CLI wrapper ports registered by this extension.
@@ -32,11 +31,11 @@ func (e *Extension) Provides() []router.PortName {
 	}
 }
 
-// RouterProvideRegistration registers the real dispatcher and the remaining
-// placeholder adapters for the wrapper subsystem ports.
+// RouterProvideRegistration registers the real wrapper adapters for each subsystem port.
 func (e *Extension) RouterProvideRegistration(reg *router.Registry) error {
 	osvGate := NewOSVSecurityAdapter(defaultSecurityThreshold)
 	dispatcher := NewWrapperDispatcher(WrapperConfig{}, defaultExecFunc)
+	dispatcher.loadConfig = loadActiveDispatcherConfig
 
 	if err := reg.RouterRegisterProvider(router.PortCLIWrapperDispatcher, dispatcher); err != nil {
 		return err
@@ -46,11 +45,11 @@ func (e *Extension) RouterProvideRegistration(reg *router.Registry) error {
 		return err
 	}
 
-	if err := reg.RouterRegisterProvider(router.PortCLIWrapperMacroRunner, NewMacroRunnerPlaceholder()); err != nil {
+	if err := reg.RouterRegisterProvider(router.PortCLIWrapperMacroRunner, NewMacroRunnerAdapter()); err != nil {
 		return err
 	}
 
-	return reg.RouterRegisterProvider(router.PortCLIWrapperFormatter, NewFormatterPlaceholder())
+	return reg.RouterRegisterProvider(router.PortCLIWrapperFormatter, NewHeaderFormatterAdapter())
 }
 
 // ExtensionInstance returns the extension instance.

@@ -8,6 +8,7 @@ import (
 
 	"policycheck/internal/adapters/cliwrapper"
 	"policycheck/internal/adapters/config"
+	"policycheck/internal/adapters/readfile"
 	"policycheck/internal/adapters/scanners"
 	"policycheck/internal/adapters/walk"
 	"policycheck/internal/router"
@@ -17,6 +18,7 @@ import (
 // Keep this slice explicit and app-owned; do not leave sample providers wired here.
 var extensions = []router.Extension{
 	&config.Extension{},
+	&readfile.Extension{},
 	&walk.Extension{},
 	&scanners.Extension{},
 
