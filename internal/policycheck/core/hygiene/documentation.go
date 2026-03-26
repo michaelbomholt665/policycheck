@@ -45,6 +45,13 @@ type documentationLanguage struct {
 	commentPrefix string
 }
 
+// docContext groups common parameters used throughout documentation checks.
+type docContext struct {
+	rel  string
+	lang documentationLanguage
+	cfg  config.PolicyConfig
+}
+
 type headerMatch struct {
 	lineIndex int
 	foundPath string
@@ -105,12 +112,18 @@ func (c documentationChecker) collectViolations(path string, d fs.DirEntry, walk
 		return nil
 	}
 
+	docCtx := docContext{
+		rel:  rel,
+		lang: lang,
+		cfg:  c.cfg,
+	}
+
 	if c.cfg.Documentation.EnforceHeaders {
-		*c.viols = append(*c.viols, checkFileHeader(path, rel, lang, c.cfg)...)
+		*c.viols = append(*c.viols, checkFileHeader(path, docCtx)...)
 	}
 
 	if c.cfg.Documentation.EnforceFunctions {
-		*c.viols = append(*c.viols, checkFunctionDocumentation(c.ctx, c.root, path, rel, lang, c.cfg)...)
+		*c.viols = append(*c.viols, checkFunctionDocumentation(c.ctx, c.root, path, docCtx)...)
 	}
 
 	return nil
@@ -165,7 +178,7 @@ func resolveDocumentationLanguage(path string, cfg config.PolicyConfig) (documen
 }
 
 // checkFileHeader validates the file header path and module description on line 1.
-func checkFileHeader(path, rel string, lang documentationLanguage, cfg config.PolicyConfig) []types.Violation {
+func checkFileHeader(path string, docCtx docContext) []types.Violation {
 	content, err := host.ReadFile(path)
 	if err != nil {
 		return nil
@@ -179,30 +192,28 @@ func checkFileHeader(path, rel string, lang documentationLanguage, cfg config.Po
 	var viols []types.Violation
 	headerStartLine := 0
 
-	if lang.name == "python" {
-		shebangLine, shebangViols := checkPythonShebang(lines, rel, lang, cfg)
+	if docCtx.lang.name == "python" {
+		shebangLine, shebangViols := checkPythonShebang(lines, docCtx)
 		viols = append(viols, shebangViols...)
 		headerStartLine = shebangLine
 	}
 
-	match, matchViols := locateHeaderPath(lines, rel, lang, headerStartLine, cfg)
+	match, matchViols := locateHeaderPath(lines, headerStartLine, docCtx)
 	viols = append(viols, matchViols...)
 	if match.lineIndex < 0 {
 		return viols
 	}
 
-	viols = append(viols, checkHeaderDescription(lines, rel, lang, match.lineIndex, cfg)...)
+	viols = append(viols, checkHeaderDescription(lines, match.lineIndex, docCtx)...)
 	return viols
 }
 
 // checkPythonShebang ensures executable python scripts have the correct shebang line.
 func checkPythonShebang(
 	lines []string,
-	rel string,
-	lang documentationLanguage,
-	cfg config.PolicyConfig,
+	docCtx docContext,
 ) (int, []types.Violation) {
-	if !requiresPythonShebang(rel, cfg) {
+	if !requiresPythonShebang(docCtx) {
 		if len(lines) > 0 && strings.HasPrefix(strings.TrimSpace(lines[0]), "#!") {
 			return 1, nil
 		}
@@ -214,50 +225,42 @@ func checkPythonShebang(
 	}
 
 	return 0, []types.Violation{newDocumentationViolation(
-		rel,
 		1,
-		lang,
 		documentationViolationSpec{
 			subject:     "missing required shebang",
 			expectation: fmt.Sprintf("expected %q on line 1 for files under configured executable roots", pythonShebangLine),
 		},
-		cfg.Documentation.Level,
+		docCtx,
 	)}
 }
 
 // requiresPythonShebang returns true if the script is in a designated executable root.
-func requiresPythonShebang(rel string, cfg config.PolicyConfig) bool {
-	if cfg.Documentation.Level != "strict" || !cfg.Documentation.RequireShebangPython {
+func requiresPythonShebang(docCtx docContext) bool {
+	if docCtx.cfg.Documentation.Level != "strict" || !docCtx.cfg.Documentation.RequireShebangPython {
 		return false
 	}
 
-	return host.HasPrefix(rel, cfg.Documentation.PythonShebangRoots)
+	return host.HasPrefix(docCtx.rel, docCtx.cfg.Documentation.PythonShebangRoots)
 }
 
 // locateHeaderPath finds the repo-relative path header within the search window.
 func locateHeaderPath(
 	lines []string,
-	rel string,
-	lang documentationLanguage,
 	startLine int,
-	cfg config.PolicyConfig,
+	docCtx docContext,
 ) (headerMatch, []types.Violation) {
-	if cfg.Documentation.Level == "strict" {
+	if docCtx.cfg.Documentation.Level == "strict" {
 		return locateStrictHeaderPath(headerSearchParams{
 			lines:     lines,
-			rel:       rel,
-			lang:      lang,
 			startLine: startLine,
-			level:     cfg.Documentation.Level,
+			docCtx:    docCtx,
 		})
 	}
 
 	return locateLooseHeaderPath(headerSearchParams{
 		lines:     lines,
-		rel:       rel,
-		lang:      lang,
 		startLine: startLine,
-		level:     cfg.Documentation.Level,
+		docCtx:    docCtx,
 	})
 }
 
@@ -265,19 +268,17 @@ func locateHeaderPath(
 func locateStrictHeaderPath(p headerSearchParams) (headerMatch, []types.Violation) {
 	if p.startLine >= len(p.lines) {
 		return headerMatch{lineIndex: -1}, []types.Violation{newDocumentationViolation(
-			p.rel,
 			p.startLine+1,
-			p.lang,
 			documentationViolationSpec{
 				subject:     "file header path is missing",
-				expectation: fmt.Sprintf("expected %q on line %d (end of file reached)", p.rel, p.startLine+1),
+				expectation: fmt.Sprintf("expected %q on line %d (end of file reached)", p.docCtx.rel, p.startLine+1),
 			},
-			p.level,
+			p.docCtx,
 		)}
 	}
 
-	foundPath := extractHeaderPath(p.lines[p.startLine], p.lang.commentPrefix)
-	if foundPath == p.rel {
+	foundPath := extractHeaderPath(p.lines[p.startLine], p.docCtx.lang.commentPrefix)
+	if foundPath == p.docCtx.rel {
 		return headerMatch{lineIndex: p.startLine, foundPath: foundPath}, nil
 	}
 
@@ -287,23 +288,19 @@ func locateStrictHeaderPath(p headerSearchParams) (headerMatch, []types.Violatio
 	}
 
 	return headerMatch{lineIndex: -1, foundPath: foundPath}, []types.Violation{newDocumentationViolation(
-		p.rel,
 		p.startLine+1,
-		p.lang,
 		documentationViolationSpec{
 			subject:     "file header path is incorrect",
-			expectation: fmt.Sprintf("expected %q on line %d%s", p.rel, p.startLine+1, actualText),
+			expectation: fmt.Sprintf("expected %q on line %d%s", p.docCtx.rel, p.startLine+1, actualText),
 		},
-		p.level,
+		p.docCtx,
 	)}
 }
 
 type headerSearchParams struct {
 	lines     []string
-	rel       string
-	lang      documentationLanguage
 	startLine int
-	level     string
+	docCtx    docContext
 }
 
 // locateLooseHeaderPath searches for the path header within a sliding window.
@@ -314,22 +311,20 @@ func locateLooseHeaderPath(p headerSearchParams) (headerMatch, []types.Violation
 	}
 
 	for idx := p.startLine; idx < maxLine; idx++ {
-		foundPath := extractHeaderPath(p.lines[idx], p.lang.commentPrefix)
-		if foundPath == p.rel {
+		foundPath := extractHeaderPath(p.lines[idx], p.docCtx.lang.commentPrefix)
+		if foundPath == p.docCtx.rel {
 			return headerMatch{lineIndex: idx, foundPath: foundPath}, nil
 		}
 	}
 
 	return headerMatch{lineIndex: -1}, []types.Violation{newDocumentationViolation(
-		p.rel,
 		p.startLine+1,
-		p.lang,
 		documentationViolationSpec{
 			subject:      "file header path is missing",
-			expectation:  fmt.Sprintf("expected %q within the first %d header lines", p.rel, headerSearchWindow),
+			expectation:  fmt.Sprintf("expected %q within the first %d header lines", p.docCtx.rel, headerSearchWindow),
 			functionName: "",
 		},
-		p.level,
+		p.docCtx,
 	)}
 }
 
@@ -346,14 +341,12 @@ func extractHeaderPath(line, commentPrefix string) string {
 // checkHeaderDescription ensures the module description has the correct line count.
 func checkHeaderDescription(
 	lines []string,
-	rel string,
-	lang documentationLanguage,
 	headerLine int,
-	cfg config.PolicyConfig,
+	docCtx docContext,
 ) []types.Violation {
 	descriptionCount := 0
 	for idx := headerLine + 1; idx < len(lines); idx++ {
-		descriptionLine := extractHeaderPath(lines[idx], lang.commentPrefix)
+		descriptionLine := extractHeaderPath(lines[idx], docCtx.lang.commentPrefix)
 		if descriptionLine == "" {
 			break
 		}
@@ -365,26 +358,23 @@ func checkHeaderDescription(
 	}
 
 	return []types.Violation{newDocumentationViolation(
-		rel,
 		headerLine+2,
-		lang,
 		documentationViolationSpec{
 			subject:     fmt.Sprintf("module description has %d line(s)", descriptionCount),
 			expectation: fmt.Sprintf("expected %d-%d comment lines immediately after the path header", minDescriptionLineCount, maxDescriptionLineCount),
 		},
-		cfg.Documentation.Level,
+		docCtx,
 	)}
 }
 
 // checkFunctionDocumentation dispatches function-level checks for non-Go files.
 func checkFunctionDocumentation(
 	ctx context.Context,
-	root, path, rel string,
-	lang documentationLanguage,
-	cfg config.PolicyConfig,
+	root, path string,
+	docCtx docContext,
 ) []types.Violation {
-	if lang.name == "go" {
-		return checkGoFunctionDocumentation(path, rel, lang, cfg)
+	if docCtx.lang.name == "go" {
+		return checkGoFunctionDocumentation(path, docCtx)
 	}
 
 	scanner, err := host.ResolveScannerProvider()
@@ -403,7 +393,7 @@ func checkFunctionDocumentation(
 			continue
 		}
 
-		viols = append(viols, validateScannedFunctionDocumentation(rel, lang, cfg, fact)...)
+		viols = append(viols, validateScannedFunctionDocumentation(fact, docCtx)...)
 	}
 
 	return viols
@@ -411,9 +401,8 @@ func checkFunctionDocumentation(
 
 // checkGoFunctionDocumentation performs AST-based documentation checks for Go functions.
 func checkGoFunctionDocumentation(
-	path, rel string,
-	lang documentationLanguage,
-	cfg config.PolicyConfig,
+	path string,
+	docCtx docContext,
 ) []types.Violation {
 	content, err := host.ReadFile(path)
 	if err != nil {
@@ -433,7 +422,7 @@ func checkGoFunctionDocumentation(
 			return true
 		}
 
-		if fnViols := inspectGoFunction(fn, fset, rel, lang, cfg); len(fnViols) > 0 {
+		if fnViols := inspectGoFunction(fn, fset, docCtx); len(fnViols) > 0 {
 			viols = append(viols, fnViols...)
 		}
 		return true
@@ -443,45 +432,37 @@ func checkGoFunctionDocumentation(
 }
 
 // inspectGoFunction validates the documentation presence and style for a single Go function.
-func inspectGoFunction(fn *ast.FuncDecl, fset *token.FileSet, rel string, lang documentationLanguage, cfg config.PolicyConfig) []types.Violation {
+func inspectGoFunction(fn *ast.FuncDecl, fset *token.FileSet, docCtx docContext) []types.Violation {
 	line := fset.Position(fn.Pos()).Line
 	name := fn.Name.Name
 
 	if fn.Doc == nil || strings.TrimSpace(fn.Doc.Text()) == "" {
 		return []types.Violation{newDocumentationViolation(
-			rel,
 			line,
-			lang,
 			documentationViolationSpec{
 				subject:      fmt.Sprintf("%s %q is missing documentation", functionSubject(fn), name),
 				expectation:  fmt.Sprintf("expected a doc comment immediately above the %s", functionSubject(fn)),
 				functionName: name,
 			},
-			cfg.Documentation.Level,
+			docCtx,
 		)}
 	}
 
-	if cfg.Documentation.Level == "loose" || cfg.Documentation.GoStyle == "presence_only" {
+	if docCtx.cfg.Documentation.Level == "loose" || docCtx.cfg.Documentation.GoStyle == "presence_only" {
 		return nil
 	}
 
 	return verifyGoFunctionStyle(goStyleParams{
-		fn:      fn,
-		fset:    fset,
-		rel:     rel,
-		lang:    lang,
-		level:   cfg.Documentation.Level,
-		goStyle: cfg.Documentation.GoStyle,
+		fn:     fn,
+		fset:   fset,
+		docCtx: docCtx,
 	})
 }
 
 type goStyleParams struct {
-	fn      *ast.FuncDecl
-	fset    *token.FileSet
-	rel     string
-	lang    documentationLanguage
-	level   string
-	goStyle string
+	fn     *ast.FuncDecl
+	fset   *token.FileSet
+	docCtx docContext
 }
 
 // verifyGoFunctionStyle performs deep style checks for a Go function that has documentation.
@@ -491,208 +472,40 @@ func verifyGoFunctionStyle(p goStyleParams) []types.Violation {
 	docText := strings.TrimSpace(p.fn.Doc.Text())
 	summary := firstNonEmptyLine(docText)
 
-	if p.goStyle == "google" && !strings.HasPrefix(summary, name) {
+	if p.docCtx.cfg.Documentation.GoStyle == "google" && !strings.HasPrefix(summary, name) {
 		viols = append(viols, newDocumentationViolation(
-			p.rel,
 			p.fset.Position(p.fn.Doc.Pos()).Line,
-			p.lang,
 			documentationViolationSpec{
 				subject:      fmt.Sprintf("%s %q violates documentation style", functionSubject(p.fn), name),
 				expectation:  fmt.Sprintf("expected the summary line to start with %q", name),
 				functionName: name,
 			},
-			p.level,
+			p.docCtx,
 		))
 	}
 
 	if floorReason := validateSummaryQuality(summary, name, true); floorReason != "" {
 		viols = append(viols, newDocumentationViolation(
-			p.rel,
 			p.fset.Position(p.fn.Doc.Pos()).Line,
-			p.lang,
 			documentationViolationSpec{
 				subject:      fmt.Sprintf("%s %q violates documentation style", functionSubject(p.fn), name),
 				expectation:  floorReason,
 				functionName: name,
 			},
-			p.level,
+			p.docCtx,
 		))
 	}
 
-	if p.goStyle == "google" && needsGoBlankSeparator(p.fn.Doc) {
+	if p.docCtx.cfg.Documentation.GoStyle == "google" && needsGoBlankSeparator(p.fn.Doc) {
 		viols = append(viols, newDocumentationViolation(
-			p.rel,
 			p.fset.Position(p.fn.Doc.Pos()).Line,
-			p.lang,
 			documentationViolationSpec{
 				subject:      fmt.Sprintf("%s %q violates documentation style", functionSubject(p.fn), name),
 				expectation:  "expected a blank comment separator line before an additional paragraph",
 				functionName: name,
 			},
-			p.level,
+			p.docCtx,
 		))
-	}
-
-	return viols
-}
-
-// validateScannedFunctionDocumentation validates the docstring of a scanned symbol.
-func validateScannedFunctionDocumentation(
-	rel string,
-	lang documentationLanguage,
-	cfg config.PolicyConfig,
-	fact types.PolicyFact,
-) []types.Violation {
-	if strings.TrimSpace(fact.Docstring) == "" {
-		return []types.Violation{newDocumentationViolation(
-			rel,
-			fact.LineNumber,
-			lang,
-			documentationViolationSpec{
-				subject:      fmt.Sprintf("%s %q is missing documentation", fact.SymbolKind, fact.SymbolName),
-				expectation:  fmt.Sprintf("expected attached documentation immediately above the %s", fact.SymbolKind),
-				functionName: fact.SymbolName,
-			},
-			cfg.Documentation.Level,
-		)}
-	}
-
-	if cfg.Documentation.Level == "loose" {
-		return nil
-	}
-
-	switch lang.name {
-	case "python":
-		return validatePythonStrictDocumentation(rel, lang, cfg, fact)
-	case "typescript":
-		return validateTypeScriptStrictDocumentation(rel, lang, cfg, fact)
-	default:
-		return nil
-	}
-}
-
-// validatePythonStrictDocumentation delegates to specific Python docstring style validators.
-func validatePythonStrictDocumentation(
-	rel string,
-	lang documentationLanguage,
-	cfg config.PolicyConfig,
-	fact types.PolicyFact,
-) []types.Violation {
-	style := cfg.Documentation.PythonStyle
-	if style == "presence_only" {
-		return nil
-	}
-
-	summary := firstNonEmptyLine(fact.Docstring)
-	if style == "standard" {
-		return validateStrictSummaryFloor(rel, lang, cfg, fact, summary)
-	}
-
-	if viols := validateStrictSummaryFloor(rel, lang, cfg, fact, summary); len(viols) > 0 {
-		return viols
-	}
-
-	switch style {
-	case "google":
-		return validatePythonGoogleDoc(rel, lang, cfg, fact)
-	case "numpy":
-		return validatePythonNumpyDoc(rel, lang, cfg, fact)
-	case "restructuredtext":
-		return validatePythonRESTDoc(rel, lang, cfg, fact)
-	default:
-		return nil
-	}
-}
-
-// validateTypeScriptStrictDocumentation validates TSDoc blocks in TypeScript files.
-func validateTypeScriptStrictDocumentation(
-	rel string,
-	lang documentationLanguage,
-	cfg config.PolicyConfig,
-	fact types.PolicyFact,
-) []types.Violation {
-	style := cfg.Documentation.TypeScriptStyle
-	if style == "presence_only" {
-		return nil
-	}
-
-	summary := firstTypeScriptSummary(fact.Docstring)
-	if style == "standard" {
-		return validateStrictSummaryFloor(rel, lang, cfg, fact, summary)
-	}
-
-	if !strings.HasPrefix(strings.TrimSpace(fact.Docstring), "/**") {
-		return []types.Violation{newStyleViolation(
-			rel,
-			fact.LineNumber,
-			lang,
-			cfg.Documentation.Level,
-			fact,
-			"expected a /** ... */ documentation block immediately above the function",
-		)}
-	}
-
-	if viols := validateStrictSummaryFloor(rel, lang, cfg, fact, summary); len(viols) > 0 {
-		return viols
-	}
-
-	return validateTypeScriptTagSections(rel, lang, cfg, fact)
-}
-
-// validatePythonGoogleDoc validates presence of Args: and Returns: in Google style.
-func validatePythonGoogleDoc(
-	rel string,
-	lang documentationLanguage,
-	cfg config.PolicyConfig,
-	fact types.PolicyFact,
-) []types.Violation {
-	var viols []types.Violation
-	if len(fact.Params) > 0 && !googleArgsRegex.MatchString(fact.Docstring) {
-		viols = append(viols, newStyleViolation(rel, fact.LineNumber, lang, cfg.Documentation.Level, fact, `missing required "Args:" section`))
-	}
-
-	if !googleReturnsRegex.MatchString(fact.Docstring) {
-		viols = append(viols, newStyleViolation(rel, fact.LineNumber, lang, cfg.Documentation.Level, fact, `missing required "Returns:" section`))
-	}
-
-	return viols
-}
-
-// validatePythonNumpyDoc validates presence of Parameters and Returns in Numpy style.
-func validatePythonNumpyDoc(
-	rel string,
-	lang documentationLanguage,
-	cfg config.PolicyConfig,
-	fact types.PolicyFact,
-) []types.Violation {
-	var viols []types.Violation
-	if len(fact.Params) > 0 && !numpyParametersRegex.MatchString(fact.Docstring) {
-		viols = append(viols, newStyleViolation(rel, fact.LineNumber, lang, cfg.Documentation.Level, fact, `missing required "Parameters" section`))
-	}
-
-	if !numpyReturnsRegex.MatchString(fact.Docstring) {
-		viols = append(viols, newStyleViolation(rel, fact.LineNumber, lang, cfg.Documentation.Level, fact, `missing required "Returns" section`))
-	}
-
-	return viols
-}
-
-// validatePythonRESTDoc validates presence of :param: and :returns: in reST style.
-func validatePythonRESTDoc(
-	rel string,
-	lang documentationLanguage,
-	cfg config.PolicyConfig,
-	fact types.PolicyFact,
-) []types.Violation {
-	var viols []types.Violation
-	for _, param := range fact.Params {
-		if !strings.Contains(fact.Docstring, ":param "+param+":") {
-			viols = append(viols, newStyleViolation(rel, fact.LineNumber, lang, cfg.Documentation.Level, fact, fmt.Sprintf("missing :param field for argument %q", param)))
-		}
-	}
-
-	if !strings.Contains(fact.Docstring, ":returns:") && !strings.Contains(fact.Docstring, ":return:") {
-		viols = append(viols, newStyleViolation(rel, fact.LineNumber, lang, cfg.Documentation.Level, fact, "missing :returns: field"))
 	}
 
 	return viols
@@ -730,22 +543,6 @@ func firstNonEmptyLine(text string) string {
 		if trimmed != "" {
 			return trimmed
 		}
-	}
-
-	return ""
-}
-
-// firstTypeScriptSummary extracts the first meaningful summary line from a TSDoc block.
-func firstTypeScriptSummary(docstring string) string {
-	for _, line := range strings.Split(docstring, "\n") {
-		trimmed := strings.TrimSpace(line)
-		trimmed = strings.TrimPrefix(trimmed, "/**")
-		trimmed = strings.TrimPrefix(trimmed, "*/")
-		trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "*"))
-		if trimmed == "" || strings.HasPrefix(trimmed, "@") {
-			continue
-		}
-		return trimmed
 	}
 
 	return ""
@@ -797,100 +594,34 @@ func functionSubject(fn *ast.FuncDecl) string {
 	return "function"
 }
 
-// validateStrictSummaryFloor checks that a summary meets minimum length and quality rules.
-func validateStrictSummaryFloor(
-	rel string,
-	lang documentationLanguage,
-	cfg config.PolicyConfig,
-	fact types.PolicyFact,
-	summary string,
-) []types.Violation {
-	floorReason := validateSummaryQuality(summary, fact.SymbolName, false)
-	if floorReason == "" {
-		return nil
-	}
-
-	return []types.Violation{newStyleViolation(
-		rel,
-		fact.LineNumber,
-		lang,
-		cfg.Documentation.Level,
-		fact,
-		floorReason,
-	)}
-}
-
-// validateTypeScriptTagSections ensures required TSDoc tags like @param are present.
-func validateTypeScriptTagSections(
-	rel string,
-	lang documentationLanguage,
-	cfg config.PolicyConfig,
-	fact types.PolicyFact,
-) []types.Violation {
-	var viols []types.Violation
-	for _, param := range fact.Params {
-		if strings.Contains(fact.Docstring, "@param "+param) {
-			continue
-		}
-
-		viols = append(viols, newStyleViolation(
-			rel,
-			fact.LineNumber,
-			lang,
-			cfg.Documentation.Level,
-			fact,
-			fmt.Sprintf("missing @param tag for argument %q", param),
-		))
-	}
-
-	if strings.Contains(fact.Docstring, "@returns") || strings.Contains(fact.Docstring, "@return") {
-		return viols
-	}
-
-	return append(viols, newStyleViolation(
-		rel,
-		fact.LineNumber,
-		lang,
-		cfg.Documentation.Level,
-		fact,
-		"missing required @returns tag",
-	))
-}
-
 // newStyleViolation creates a documentation violation with specific style information.
 func newStyleViolation(
-	file string,
 	line int,
-	lang documentationLanguage,
-	level string,
 	fact types.PolicyFact,
 	expectation string,
+	docCtx docContext,
 ) types.Violation {
 	return newDocumentationViolation(
-		file,
 		line,
-		lang,
 		documentationViolationSpec{
 			subject:      fmt.Sprintf("%s %q violates documentation style", fact.SymbolKind, fact.SymbolName),
 			expectation:  expectation,
 			functionName: fact.SymbolName,
 		},
-		level,
+		docCtx,
 	)
 }
 
 // newDocumentationViolation creates a standardized violation for documentation hygiene issues.
 func newDocumentationViolation(
-	file string,
 	line int,
-	lang documentationLanguage,
 	spec documentationViolationSpec,
-	level string,
+	docCtx docContext,
 ) types.Violation {
-	message := fmt.Sprintf("%s (level=%s, %s=%s); %s [%s]", spec.subject, level, lang.styleKey, lang.styleValue, spec.expectation, documentationRuleID)
+	message := fmt.Sprintf("%s (level=%s, %s=%s); %s [%s]", spec.subject, docCtx.cfg.Documentation.Level, docCtx.lang.styleKey, docCtx.lang.styleValue, spec.expectation, documentationRuleID)
 	return types.Violation{
 		RuleID:   documentationRuleID,
-		File:     file,
+		File:     docCtx.rel,
 		Line:     line,
 		Function: spec.functionName,
 		Message:  message,
