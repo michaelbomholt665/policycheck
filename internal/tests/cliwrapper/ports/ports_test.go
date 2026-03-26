@@ -55,6 +55,7 @@ func (dispatcherProxy) Dispatch(_ context.Context, _ []string) error { return ni
 type securityProxy struct{}
 
 func (securityProxy) CheckPackages(_ context.Context, _ string, _ []string) error { return nil }
+func (securityProxy) CheckLockfile(_ context.Context, _ string, _ string) error   { return nil }
 
 type macroProxy struct{}
 

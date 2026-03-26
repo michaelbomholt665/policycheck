@@ -13,10 +13,10 @@ Build the wrapper control plane: config resolution, wrapper command classificati
 
 ## Testing Posture For This Phase
 
-- [ ] Use tests only to drive the next config or dispatch design decision.
-- [ ] Avoid building broad regression suites around config and bootstrap code that is still likely to be simplified.
-- [ ] Prefer one focused RED test per behaviour slice over many anticipatory cases.
-- [ ] Defer fuller regression and integration coverage until the wrapper control plane stabilizes.
+- [x] Use tests only to drive the next config or dispatch design decision.
+- [x] Avoid building broad regression suites around config and bootstrap code that is still likely to be simplified.
+- [x] Prefer one focused RED test per behaviour slice over many anticipatory cases.
+- [x] Defer fuller regression and integration coverage until the wrapper control plane stabilizes.
 
 ## Dependencies
 
@@ -79,123 +79,123 @@ RunEntry --> CLIWrapperDispatcher
 
 ## TDD Cycles
 
-### T1 Wrapper Config Schema [ ]
+### T1 Wrapper Config Schema [x]
 
 Summary: define a wrapper-local schema so wrapper policies do not piggyback on policycheck config semantics by accident.
 
 RED:
-- [ ] Write tests that fail until wrapper config structs support `security`, `tooling.gates`, `macros`, and `ui`.
-- [ ] Add validation tests for repo config trying to become less strict than global config.
+- [x] Write tests that fail until wrapper config structs support `security`, `tooling.gates`, `macros`, and `ui`.
+- [x] Add validation tests for repo config trying to become less strict than global config.
 
 GREEN:
-- [ ] Implement wrapper config structs under `internal/cliwrapper/config.go`.
-- [ ] Support wrapper-local validation helpers for severity ordering and macro shape.
-- [ ] Keep the schema separate from existing policycheck analysis config types unless reuse is deliberate and documented.
+- [x] Implement wrapper config structs under `internal/cliwrapper/config.go`.
+- [x] Support wrapper-local validation helpers for severity ordering and macro shape.
+- [x] Keep the schema separate from existing policycheck analysis config types unless reuse is deliberate and documented.
 
 REFACTOR:
-- [ ] Normalize severity helpers into small reusable functions.
-- [ ] Remove duplicated validation logic from tests once behaviour is stable.
+- [x] Normalize severity helpers into small reusable functions.
+- [x] Remove duplicated validation logic from tests once behaviour is stable.
 
 Best practices and standards:
-- [ ] Add doc comments for exported types.
-- [ ] Wrap parse and validation errors with file-scope context.
-- [ ] Keep config structs intentionally narrow for this subsystem.
+- [x] Add doc comments for exported types.
+- [x] Wrap parse and validation errors with file-scope context.
+- [x] Keep config structs intentionally narrow for this subsystem.
 
 Acceptance checks:
-- [ ] Tests prove the wrapper config can evolve independently.
-- [ ] The phase does not require real command execution yet.
+- [x] Tests prove the wrapper config can evolve independently.
+- [x] The phase does not require real command execution yet.
 
-### T2 Wrapper Config Loader [ ]
+### T2 Wrapper Config Loader [x]
 
 Summary: load global and repo config for the wrapper using upward repo-root resolution and documented merge rules.
 
 RED:
-- [ ] Write the minimum set of failing tests needed to define global-only load, repo override, and invalid threshold relaxation.
-- [ ] Add only the essential fallback test for missing repo config.
+- [x] Write the minimum set of failing tests needed to define global-only load, repo override, and invalid threshold relaxation.
+- [x] Add only the essential fallback test for missing repo config.
 
 GREEN:
-- [ ] Implement `config_loader.go` with explicit load order.
-- [ ] Walk upward from the current working directory to locate `policy-gate.toml`.
-- [ ] Merge repo config over global config while enforcing the stricter-only security rule.
+- [x] Implement `config_loader.go` with explicit load order.
+- [x] Walk upward from the current working directory to locate `policy-gate.toml`.
+- [x] Merge repo config over global config while enforcing the stricter-only security rule.
 
 REFACTOR:
-- [ ] Split file lookup from merge logic if the loader becomes complex.
-- [ ] Keep cognitive complexity within repository limits.
+- [x] Split file lookup from merge logic if the loader becomes complex.
+- [x] Keep cognitive complexity within repository limits.
 
 Best practices and standards:
-- [ ] No singleton config cache.
-- [ ] Fresh config load per command.
-- [ ] Return actionable errors that identify whether global or repo config failed.
-- [ ] Do not expand the test matrix beyond what the current implementation step needs.
+- [x] No singleton config cache.
+- [x] Fresh config load per command.
+- [x] Return actionable errors that identify whether global or repo config failed.
+- [x] Do not expand the test matrix beyond what the current implementation step needs.
 
 Acceptance checks:
-- [ ] Loader tests pass.
-- [ ] Missing repo config falls back to global-only behaviour.
+- [x] Loader tests pass.
+- [x] Missing repo config falls back to global-only behaviour.
 
-### T3 Wrapper Mode Detection [ ]
+### T3 Wrapper Mode Detection [x]
 
 Summary: classify incoming args into wrapper modes before any adapter executes.
 
 RED:
-- [ ] Write only the focused failing tests needed to distinguish `run`, `fmt headers`, package installs, `-then`, and passthrough.
-- [ ] Keep the `go test` passthrough case as a single explicit regression guard.
+- [x] Write only the focused failing tests needed to distinguish `run`, `fmt headers`, package installs, `-then`, and passthrough.
+- [x] Keep the `go test` passthrough case as a single explicit regression guard.
 
 GREEN:
-- [ ] Implement `detector.go`.
-- [ ] Return a small enum or typed mode for `Passthrough`, `PackageGate`, `ToolingGate`, `MacroRun`, and `FormatHeaders`.
-- [ ] Keep the detection rules deterministic and easy to extend.
+- [x] Implement `detector.go`.
+- [x] Return a small enum or typed mode for `Passthrough`, `PackageGate`, `ToolingGate`, `MacroRun`, and `FormatHeaders`.
+- [x] Keep the detection rules deterministic and easy to extend.
 
 REFACTOR:
-- [ ] Extract manager and subcommand tables if hard-coded branching becomes noisy.
-- [ ] Remove duplicated normalization logic across tests and implementation.
+- [x] Extract manager and subcommand tables if hard-coded branching becomes noisy.
+- [x] Remove duplicated normalization logic across tests and implementation.
 
 Best practices and standards:
-- [ ] Prefer table-driven tests.
-- [ ] Do not infer wrapper intent from shell syntax the process never receives.
-- [ ] Treat unknown commands as passthrough by default.
-- [ ] Keep tables small while the classification rules are still evolving.
+- [x] Prefer table-driven tests.
+- [x] Do not infer wrapper intent from shell syntax the process never receives.
+- [x] Treat unknown commands as passthrough by default.
+- [x] Keep tables small while the classification rules are still evolving.
 
 Acceptance checks:
-- [ ] The detector can route wrapper features without touching real execution logic.
-- [ ] Tests document the subsystem boundary clearly.
+- [x] The detector can route wrapper features without touching real execution logic.
+- [x] Tests document the subsystem boundary clearly.
 
-### T4 Router-Resolved Wrapper Bootstrap [ ]
+### T4 Router-Resolved Wrapper Bootstrap [x]
 
 Summary: prove the shared app boot can classify wrapper work, load wrapper config, resolve wrapper ports, and hand off to the wrapper subsystem.
 
 RED:
-- [ ] Write a boot test that expects the wrapper dispatcher port to be resolved and invoked when wrapper mode is selected.
-- [ ] Write a separate test that expects normal policycheck execution to remain unaffected for policycheck-specific commands.
+- [x] Write a boot test that expects the wrapper dispatcher port to be resolved and invoked when wrapper mode is selected.
+- [x] Write a separate test that expects normal policycheck execution to remain unaffected for policycheck-specific commands.
 
 GREEN:
-- [ ] Add the bootstrap seam in the shared app layer.
-- [ ] Resolve wrapper dependencies through the router boundary only.
-- [ ] Pass a wrapper request object that contains the classified mode, raw args, cwd, and loaded config.
+- [x] Add the bootstrap seam in the shared app layer.
+- [x] Resolve wrapper dependencies through the router boundary only.
+- [x] Pass a wrapper request object that contains the classified mode, raw args, cwd, and loaded config.
 
 REFACTOR:
-- [ ] Tighten request and response types so later phases can add execution details without widening every call signature.
+- [x] Tighten request and response types so later phases can add execution details without widening every call signature.
 
 Best practices and standards:
-- [ ] Shared entrypoint, separate request model.
-- [ ] No direct adapter imports from the shared boot path.
-- [ ] Boot tests should focus on selection logic, not adapter internals.
-- [ ] Resist adding extra boot permutations until the handoff seam has settled.
+- [x] Shared entrypoint, separate request model.
+- [x] No direct adapter imports from the shared boot path.
+- [x] Boot tests should focus on selection logic, not adapter internals.
+- [x] Resist adding extra boot permutations until the handoff seam has settled.
 
 Acceptance checks:
-- [ ] Wrapper bootstrap tests pass.
-- [ ] Policycheck-only commands still follow their existing path.
+- [x] Wrapper bootstrap tests pass.
+- [x] Policycheck-only commands still follow their existing path.
 
 ## Verification
 
-- [ ] `go test ./internal/tests/cliwrapper/config/... -count=1`
-- [ ] `go test ./internal/tests/cliwrapper/detector/... -count=1`
-- [ ] `go test ./internal/tests/cliwrapper/boot/... -count=1`
-- [ ] `go run ./cmd/policycheck`
+- [x] `go test ./internal/tests/cliwrapper/config/... -count=1` — 13/13 PASS
+- [x] `go test ./internal/tests/cliwrapper/detector/... -count=1` — 11/11 PASS
+- [x] `go test ./internal/tests/cliwrapper/boot/... -count=1` — 5/5 PASS
+- [x] `go run ./cmd/policycheck` — no new ERRORs (pre-existing WARNs only)
 
 Verification note: stop after the targeted TDD cycle passes; do not inflate this phase with coverage-oriented follow-up tests.
 
 ## Exit Criteria
 
-- [ ] Wrapper config loads independently.
-- [ ] Wrapper mode detection is stable.
-- [ ] Shared app boot can hand off to wrapper placeholders through the router.
+- [x] Wrapper config loads independently.
+- [x] Wrapper mode detection is stable.
+- [x] Shared app boot can hand off to wrapper placeholders through the router.

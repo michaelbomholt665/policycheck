@@ -47,6 +47,18 @@ func TestSecurityGatePlaceholder_CheckPackages_ReturnsNotImplementedError(t *tes
 	assert.Contains(t, err.Error(), "cli wrapper security gate placeholder")
 }
 
+// TestSecurityGatePlaceholder_CheckLockfile_ReturnsNotImplementedError verifies the
+// placeholder lockfile scan path returns a wrapper-context error.
+func TestSecurityGatePlaceholder_CheckLockfile_ReturnsNotImplementedError(t *testing.T) {
+	t.Parallel()
+
+	var p ports.CLIWrapperSecurityGate = cliwrapper.NewSecurityGatePlaceholder()
+	err := p.CheckLockfile(context.Background(), "", "package-lock.json")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cli wrapper security gate placeholder")
+}
+
 // TestMacroRunnerPlaceholder_RunMacro_ReturnsNotImplementedError verifies the
 // placeholder macro runner returns a wrapper-context error.
 func TestMacroRunnerPlaceholder_RunMacro_ReturnsNotImplementedError(t *testing.T) {

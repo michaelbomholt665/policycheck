@@ -126,6 +126,7 @@ allowed_children = [
     "host",
     "utils",
     "cli",
+    "cliwrapper",
 ]
 ignore_children = []
 

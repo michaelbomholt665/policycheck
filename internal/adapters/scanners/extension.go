@@ -17,8 +17,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"policycheck/internal/policycheck/types"
-	"policycheck/internal/policycheck/utils"
 	"policycheck/internal/ports"
 	"policycheck/internal/router"
 )
@@ -51,7 +49,7 @@ func ExtensionInstance() router.Extension {
 type Adapter struct{}
 
 // RunScanners executes the external scanners against the provided root directory.
-func (a *Adapter) RunScanners(ctx context.Context, root string) ([]types.PolicyFact, error) {
+func (a *Adapter) RunScanners(ctx context.Context, root string) ([]ports.PolicyFact, error) {
 	// Resolve walk provider from router
 	rawWalk, err := router.RouterResolveProvider(router.PortWalk)
 	if err != nil {
@@ -78,7 +76,7 @@ func (a *Adapter) RunScanners(ctx context.Context, root string) ([]types.PolicyF
 		return nil, fmt.Errorf("write javascript scanner script: %w", err)
 	}
 
-	facts := []types.PolicyFact{}
+	facts := []ports.PolicyFact{}
 
 	// 1. Run Go scanner (internal)
 	goFacts, err := runGoScanner(root, walkProvider)
@@ -106,8 +104,8 @@ func (a *Adapter) RunScanners(ctx context.Context, root string) ([]types.PolicyF
 	return facts, nil
 }
 
-func runGoScanner(root string, walk ports.WalkProvider) ([]types.PolicyFact, error) {
-	var facts []types.PolicyFact
+func runGoScanner(root string, walk ports.WalkProvider) ([]ports.PolicyFact, error) {
+	var facts []ports.PolicyFact
 	fset := token.NewFileSet()
 
 	err := walk.WalkDirectoryTree(root, func(path string, d fs.DirEntry, err error) error {
@@ -123,7 +121,7 @@ func runGoScanner(root string, walk ports.WalkProvider) ([]types.PolicyFact, err
 			return fmt.Errorf("parse go file %s: %w", path, err)
 		}
 
-		rel := utils.ToSlashRel(root, path)
+		rel := toSlashRel(root, path)
 
 		facts = append(facts, extractGoFunctionFacts(fset, f, rel)...)
 		return nil
@@ -132,8 +130,8 @@ func runGoScanner(root string, walk ports.WalkProvider) ([]types.PolicyFact, err
 	return facts, err
 }
 
-func extractGoFunctionFacts(fset *token.FileSet, f *ast.File, rel string) []types.PolicyFact {
-	var facts []types.PolicyFact
+func extractGoFunctionFacts(fset *token.FileSet, f *ast.File, rel string) []ports.PolicyFact {
+	var facts []ports.PolicyFact
 	ast.Inspect(f, func(n ast.Node) bool {
 		fn, ok := n.(*ast.FuncDecl)
 		if !ok {
@@ -143,7 +141,7 @@ func extractGoFunctionFacts(fset *token.FileSet, f *ast.File, rel string) []type
 		start := fset.Position(fn.Pos()).Line
 		end := fset.Position(fn.End()).Line
 
-		fact := types.PolicyFact{
+		fact := ports.PolicyFact{
 			Kind:       "function_quality_fact",
 			Language:   "go",
 			FilePath:   rel,
@@ -172,7 +170,7 @@ func extractGoFunctionFacts(fset *token.FileSet, f *ast.File, rel string) []type
 	return facts
 }
 
-func runScanner(ctx context.Context, root, runtime, scriptPath string, walk ports.WalkProvider) ([]types.PolicyFact, error) {
+func runScanner(ctx context.Context, root, runtime, scriptPath string, walk ports.WalkProvider) ([]ports.PolicyFact, error) {
 	files, err := gatherScannerFiles(root, runtime, walk)
 	if err != nil || len(files) == 0 {
 		return nil, nil
@@ -194,10 +192,10 @@ func runScanner(ctx context.Context, root, runtime, scriptPath string, walk port
 		return nil, err
 	}
 
-	facts := []types.PolicyFact{}
+	facts := []ports.PolicyFact{}
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
-		var fact types.PolicyFact
+		var fact ports.PolicyFact
 		if err := json.Unmarshal(scanner.Bytes(), &fact); err != nil {
 			return nil, fmt.Errorf("decode %s scanner output: %w", runtime, err)
 		}
@@ -283,4 +281,26 @@ func gatherScannerFiles(root, runtime string, walk ports.WalkProvider) ([]string
 		return nil
 	})
 	return files, err
+}
+
+func toSlashRel(root, target string) string {
+	if !filepath.IsAbs(target) {
+		return normalizePolicyPath(target)
+	}
+
+	rel, err := filepath.Rel(root, target)
+	if err != nil {
+		return normalizePolicyPath(target)
+	}
+
+	return normalizePolicyPath(rel)
+}
+
+func normalizePolicyPath(value string) string {
+	cleaned := filepath.ToSlash(filepath.Clean(value))
+	if cleaned == "." {
+		return ""
+	}
+
+	return strings.TrimPrefix(cleaned, "./")
 }

@@ -13,4 +13,7 @@ type CLIWrapperSecurityGate interface {
 	// CheckPackages queries the security backend for each purl in the given ecosystem.
 	// Returns a non-nil error if any package exceeds the configured block threshold.
 	CheckPackages(ctx context.Context, ecosystem string, purls []string) error
+	// CheckLockfile scans a resolved lockfile after install to catch transitive
+	// vulnerabilities introduced by the package manager operation.
+	CheckLockfile(ctx context.Context, ecosystem string, lockfilePath string) error
 }

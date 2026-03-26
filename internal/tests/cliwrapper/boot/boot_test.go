@@ -1,5 +1,5 @@
-// internal/tests/cliwrapper/router/boot_test.go
-package router_test
+// internal/tests/cliwrapper/boot/boot_test.go
+package boot_test
 
 import (
 	"context"
@@ -17,8 +17,8 @@ import (
 
 const bootTimeout = 10 * time.Second
 
-// bootRouter is a helper that resets the router and boots all registered extensions.
-// Tests that use this helper must not run in parallel — router state is global.
+// bootRouter resets and boots the router. Tests using this helper must NOT run
+// in parallel — router state is global.
 func bootRouter(t *testing.T) {
 	t.Helper()
 
@@ -32,8 +32,8 @@ func bootRouter(t *testing.T) {
 	require.NoError(t, err, "router boot must not fail")
 }
 
-// TestWrapperBoot_DispatcherPort_Resolves confirms the CLI wrapper dispatcher port
-// can be resolved from the router independently of any policycheck command path.
+// TestWrapperBoot_DispatcherPort_Resolves confirms the dispatcher port is
+// reachable through the router after boot.
 func TestWrapperBoot_DispatcherPort_Resolves(t *testing.T) {
 	bootRouter(t)
 
@@ -45,8 +45,8 @@ func TestWrapperBoot_DispatcherPort_Resolves(t *testing.T) {
 	assert.True(t, ok, "resolved provider must implement CLIWrapperDispatcher")
 }
 
-// TestWrapperBoot_SecurityGatePort_Resolves confirms the CLI wrapper security gate port
-// can be resolved from the router independently of any policycheck command path.
+// TestWrapperBoot_SecurityGatePort_Resolves confirms the security gate port
+// resolves correctly after boot.
 func TestWrapperBoot_SecurityGatePort_Resolves(t *testing.T) {
 	bootRouter(t)
 
@@ -58,8 +58,8 @@ func TestWrapperBoot_SecurityGatePort_Resolves(t *testing.T) {
 	assert.True(t, ok, "resolved provider must implement CLIWrapperSecurityGate")
 }
 
-// TestWrapperBoot_MacroRunnerPort_Resolves confirms the CLI wrapper macro runner port
-// can be resolved from the router independently of any policycheck command path.
+// TestWrapperBoot_MacroRunnerPort_Resolves confirms the macro runner port
+// resolves correctly after boot.
 func TestWrapperBoot_MacroRunnerPort_Resolves(t *testing.T) {
 	bootRouter(t)
 
@@ -71,8 +71,8 @@ func TestWrapperBoot_MacroRunnerPort_Resolves(t *testing.T) {
 	assert.True(t, ok, "resolved provider must implement CLIWrapperMacroRunner")
 }
 
-// TestWrapperBoot_FormatterPort_Resolves confirms the CLI wrapper formatter port
-// can be resolved from the router independently of any policycheck command path.
+// TestWrapperBoot_FormatterPort_Resolves confirms the formatter port resolves
+// correctly after boot.
 func TestWrapperBoot_FormatterPort_Resolves(t *testing.T) {
 	bootRouter(t)
 
@@ -84,17 +84,12 @@ func TestWrapperBoot_FormatterPort_Resolves(t *testing.T) {
 	assert.True(t, ok, "resolved provider must implement CLIWrapperFormatter")
 }
 
-// TestWrapperBoot_IsIndependent_FromPolicycheckExecution proves that the wrapper
-// subsystem can be booted and all ports resolved via WrapperBootEntry without
-// invoking any policycheck command execution path.
-//
-// This test is the T4 acceptance gate: it fails if the wrapper boot logic
-// falls back to or requires the policycheck CLI dispatch path.
+// TestWrapperBoot_IsIndependent_FromPolicycheckExecution is the T4 acceptance
+// gate: WrapperBootEntry must succeed without invoking any policycheck command
+// execution path.
 func TestWrapperBoot_IsIndependent_FromPolicycheckExecution(t *testing.T) {
 	bootRouter(t)
 
-	// WrapperBootEntry is the wrapper-only dispatch seam. It must succeed without
-	// any policycheck command invocation occurring before or after this call.
 	resolved, err := cliwrapper.WrapperBootEntry()
 	require.NoError(t, err, "WrapperBootEntry must succeed without policycheck command execution")
 

@@ -25,20 +25,21 @@ Finish the wrapper feature set with macros, `fmt headers`, router hardening, and
 - `docs/command/cli-wrapper-TDD-3.md`
 - `docs/router/cli-tools.md`
 
+
 ## File Plan
 
-| File | Action | Purpose |
-| --- | --- | --- |
-| `internal/cliwrapper/template.go` | new | Macro template interpolation |
-| `internal/cliwrapper/macro_runner.go` | new | Macro execution core |
-| `internal/cliwrapper/header.go` | new | Header detection and injection |
-| `internal/cliwrapper/walker.go` | new | Repo file discovery and skip logic |
-| `internal/adapters/cliwrapper/macro_runner.go` | new/update | Router-resolved macro adapter |
-| `internal/adapters/cliwrapper/format_headers.go` | new/update | Router-resolved fmt adapter |
-| `internal/tests/cliwrapper/macro/macro_runner_test.go` | new | Macro tests |
-| `internal/tests/cliwrapper/fmt/header_test.go` | new | Header logic tests |
-| `internal/tests/cliwrapper/fmt/walker_test.go` | new | Walker tests |
-| `internal/tests/cliwrapper/integration/` | new | Router and wrapper integration tests |
+| File                                                   | Action     | Purpose                              |
+| ------------------------------------------------------ | ---------- | ------------------------------------ |
+| `internal/cliwrapper/template.go`                      | new        | Macro template interpolation         |
+| `internal/cliwrapper/macro_runner.go`                  | new        | Macro execution core                 |
+| `internal/cliwrapper/header.go`                        | new        | Header detection and injection       |
+| `internal/cliwrapper/walker.go`                        | new        | Repo file discovery and skip logic   |
+| `internal/adapters/cliwrapper/macro_runner.go`         | new/update | Router-resolved macro adapter        |
+| `internal/adapters/cliwrapper/format_headers.go`       | new/update | Router-resolved fmt adapter          |
+| `internal/tests/cliwrapper/macro/macro_runner_test.go` | new        | Macro tests                          |
+| `internal/tests/cliwrapper/fmt/header_test.go`         | new        | Header logic tests                   |
+| `internal/tests/cliwrapper/fmt/walker_test.go`         | new        | Walker tests                         |
+| `internal/tests/cliwrapper/integration/`               | new        | Router and wrapper integration tests |
 
 ## Sequence
 

@@ -1,4 +1,3 @@
-// internal/adapters/cliwrapper/wrapperboot.go
 package cliwrapper
 
 import (
@@ -10,11 +9,6 @@ import (
 )
 
 // WrapperResolved holds the four wrapper-subsystem capabilities resolved from the router.
-//
-// All fields may be placeholder implementations during development. Callers should
-// treat a non-nil WrapperResolved as the wrapper entry being operational at the
-// placeholder level; actual functionality arrives when real adapters replace the
-// placeholder registrations.
 type WrapperResolved struct {
 	// Dispatcher is the resolved CLI command dispatcher for the wrapper subsystem.
 	Dispatcher ports.CLIWrapperDispatcher
@@ -27,14 +21,6 @@ type WrapperResolved struct {
 }
 
 // WrapperBootEntry resolves all four wrapper-subsystem ports from the router boundary.
-//
-// WrapperBootEntry is the wrapper dispatch seam: it reaches the wrapper capabilities
-// without touching any policycheck command execution path. Call this function from
-// any wrapper entry point (CLI flag branch, dedicated subcommand, or integration test)
-// to prove that the wrapper subsystem boots independently.
-//
-// Returns an error if the router has not been booted or if a required port is
-// missing from the registry.
 func WrapperBootEntry() (WrapperResolved, error) {
 	dispatcher, err := resolveWrapperDispatcher()
 	if err != nil {
@@ -67,55 +53,55 @@ func WrapperBootEntry() (WrapperResolved, error) {
 func resolveWrapperDispatcher() (ports.CLIWrapperDispatcher, error) {
 	provider, err := router.RouterResolveProvider(router.PortCLIWrapperDispatcher)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve CLIWrapperDispatcher: %w", err)
 	}
 
-	d, ok := provider.(ports.CLIWrapperDispatcher)
+	dispatcher, ok := provider.(ports.CLIWrapperDispatcher)
 	if !ok {
 		return nil, errors.New("provider does not implement CLIWrapperDispatcher")
 	}
 
-	return d, nil
+	return dispatcher, nil
 }
 
 func resolveWrapperSecurityGate() (ports.CLIWrapperSecurityGate, error) {
 	provider, err := router.RouterResolveProvider(router.PortCLIWrapperSecurityGate)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve CLIWrapperSecurityGate: %w", err)
 	}
 
-	s, ok := provider.(ports.CLIWrapperSecurityGate)
+	securityGate, ok := provider.(ports.CLIWrapperSecurityGate)
 	if !ok {
 		return nil, errors.New("provider does not implement CLIWrapperSecurityGate")
 	}
 
-	return s, nil
+	return securityGate, nil
 }
 
 func resolveWrapperMacroRunner() (ports.CLIWrapperMacroRunner, error) {
 	provider, err := router.RouterResolveProvider(router.PortCLIWrapperMacroRunner)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve CLIWrapperMacroRunner: %w", err)
 	}
 
-	m, ok := provider.(ports.CLIWrapperMacroRunner)
+	macroRunner, ok := provider.(ports.CLIWrapperMacroRunner)
 	if !ok {
 		return nil, errors.New("provider does not implement CLIWrapperMacroRunner")
 	}
 
-	return m, nil
+	return macroRunner, nil
 }
 
 func resolveWrapperFormatter() (ports.CLIWrapperFormatter, error) {
 	provider, err := router.RouterResolveProvider(router.PortCLIWrapperFormatter)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve CLIWrapperFormatter: %w", err)
 	}
 
-	f, ok := provider.(ports.CLIWrapperFormatter)
+	formatter, ok := provider.(ports.CLIWrapperFormatter)
 	if !ok {
 		return nil, errors.New("provider does not implement CLIWrapperFormatter")
 	}
 
-	return f, nil
+	return formatter, nil
 }
