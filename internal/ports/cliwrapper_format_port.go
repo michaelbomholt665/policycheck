@@ -1,4 +1,6 @@
 // internal/ports/cliwrapper_format_port.go
+// Declares the router port for wrapper-driven source header formatting.
+// Keeps header-formatting consumers isolated from filesystem-specific implementations.
 package ports
 
 import "context"

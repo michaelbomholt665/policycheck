@@ -39,7 +39,8 @@ class PolicyVisitor(ast.NodeVisitor):
         Calculates quality metrics for a function and prints the fact as JSON.
         """
         end_line = getattr(node, "end_lineno", node.lineno)
-        param_count = count_parameters(node)
+        param_count, params = count_parameters(node)
+        docstring = ast.get_docstring(node) or ""
 
         fact = {
             "kind": FACT_KIND,
@@ -50,7 +51,9 @@ class PolicyVisitor(ast.NodeVisitor):
             "end_line": end_line,
             "complexity": calculate_complexity(node),
             "param_count": param_count,
+            "params": params,
             "symbol_kind": symbol_kind,
+            "docstring": docstring,
         }
         sys.stdout.write(json.dumps(fact) + "\n")
 
@@ -160,17 +163,27 @@ def calculate_complexity(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
     return visitor.complexity
 
 
-def count_parameters(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
+def count_parameters(node: ast.FunctionDef | ast.AsyncFunctionDef) -> tuple[int, list[str]]:
     """
     Counts positional-only, positional, keyword-only, and variadic parameters.
     """
-    param_count = len(node.args.posonlyargs) + len(node.args.args) + len(node.args.kwonlyargs)
+    params: list[str] = []
+    for arg in node.args.posonlyargs:
+        params.append(arg.arg)
+    for arg in node.args.args:
+        params.append(arg.arg)
+    for arg in node.args.kwonlyargs:
+        params.append(arg.arg)
     if node.args.vararg:
-        param_count += 1
+        params.append(node.args.vararg.arg)
     if node.args.kwarg:
-        param_count += 1
+        params.append(node.args.kwarg.arg)
 
-    return param_count
+    # Exclude 'self' and 'cls' for methods
+    if params and params[0] in ("self", "cls"):
+        return len(params) - 1, params[1:]
+
+    return len(params), params
 
 
 def process_file(args_file: str, args_root: str) -> None:

@@ -1,4 +1,6 @@
 // internal/cliwrapper/detector.go
+// Classifies wrapper CLI arguments into gate, macro, format, or passthrough modes.
+// Keeps wrapper dispatch selection as a pure decision layer with no I/O.
 package cliwrapper
 
 // WrapperMode classifies an incoming CLI args slice into a wrapper dispatch lane.

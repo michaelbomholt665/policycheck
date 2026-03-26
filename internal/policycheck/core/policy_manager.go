@@ -1,4 +1,6 @@
 // internal/policycheck/core/policy_manager.go
+// Package core implements the central policy execution logic.
+// It orchestrates the running of registered checks against the codebase.
 package core
 
 import (

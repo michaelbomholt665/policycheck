@@ -1,4 +1,6 @@
+// internal/policycheck/config/config_manager.go
 // Package config manages configuration loading, validation, and defaults for policycheck.
+// It defines the central PolicyConfig structure and its sub-components for all checkers.
 package config
 
 import (
@@ -25,8 +27,37 @@ type PolicyConfig struct {
 	PackageRules         PolicyPackageRulesConfig         `toml:"package_rules"`
 	AICompatibility      PolicyAICompatibilityConfig      `toml:"ai_compatibility"`
 	ScopeGuard           PolicyScopeGuardConfig           `toml:"scope_guard"`
+	RouterImports        PolicyRouterImportsConfig        `toml:"router_imports"`
+	Documentation        PolicyDocumentationConfig        `toml:"documentation"`
 	CustomRules          []PolicyCustomRule               `toml:"custom_rules"`
 	Runtime              PolicyConfigMetadata             `toml:"-"`
+}
+
+// PolicyDocumentationConfig defines the file and function documentation rules.
+type PolicyDocumentationConfig struct {
+	Enabled              bool     `toml:"enabled"`
+	Level                string   `toml:"level"` // "loose" or "strict"
+	ScanRoots            []string `toml:"scan_roots"`
+	GoStyle              string   `toml:"go_style"`         // "google"
+	PythonStyle          string   `toml:"python_style"`     // "numpy"
+	TypeScriptStyle      string   `toml:"typescript_style"` // "tsdoc"
+	EnforceHeaders       bool     `toml:"enforce_headers"`
+	EnforceFunctions     bool     `toml:"enforce_functions"`
+	RequireShebangPython bool     `toml:"require_shebang_python"`
+	PythonShebangRoots   []string `toml:"python_shebang_roots"`
+}
+
+// PolicyRouterImportsConfig defines the router import architecture rules.
+type PolicyRouterImportsConfig struct {
+	Enabled                         bool     `toml:"enabled"`
+	BusinessRoots                   []string `toml:"business_roots"`
+	AdapterRoots                    []string `toml:"adapter_roots"`
+	RouterCoreRoots                 []string `toml:"router_core_roots"`
+	RouterBootRoots                 []string `toml:"router_boot_roots"`
+	AllowedBusinessImports          []string `toml:"allowed_business_imports"`
+	ForbiddenBusinessImportPrefixes []string `toml:"forbidden_business_import_prefixes"`
+	ForbiddenAdapterToAdapter       bool     `toml:"forbidden_adapter_to_adapter"`
+	Exceptions                      []string `toml:"exceptions"`
 }
 
 // PolicyPathsConfig holds all path-related configuration grouped by scan type.
@@ -245,9 +276,42 @@ func ApplyPolicyConfigDefaults(cfg *PolicyConfig) error {
 	applyDefaultSlice(&cfg.SecretLogging.PlaceholderStrings, []string{"<token>", "<password>", "<secret>", "<api-key>", "changeme", "change_me", "replace_me", "your_token_here"})
 	applyDefaultSlice(&cfg.AICompatibility.RequiredFlags, []string{"--ai", "--user"})
 
+	applyDefaultSlice(&cfg.RouterImports.BusinessRoots, []string{"internal/policycheck", "internal/cliwrapper", "internal/ports"})
+	applyDefaultSlice(&cfg.RouterImports.AdapterRoots, []string{"internal/adapters"})
+	applyDefaultSlice(&cfg.RouterImports.RouterCoreRoots, []string{"internal/router"})
+	applyDefaultSlice(&cfg.RouterImports.RouterBootRoots, []string{"internal/app", "internal/router/ext"})
+	applyDefaultSlice(&cfg.RouterImports.AllowedBusinessImports, []string{
+		"policycheck/internal/ports",
+		"policycheck/internal/router",
+		"policycheck/internal/router/capabilities",
+	})
+	applyDefaultSlice(&cfg.RouterImports.ForbiddenBusinessImportPrefixes, []string{
+		"policycheck/internal/adapters/",
+		"policycheck/internal/router/ext/",
+	})
+	if !cfg.RouterImports.Enabled {
+		cfg.RouterImports.ForbiddenAdapterToAdapter = true
+	}
+
 	if cfg.ScopeGuard.Mode == "" {
 		cfg.ScopeGuard.Mode = ScopeGuardModeRestrict
 	}
+
+	if cfg.Documentation.Level == "" {
+		cfg.Documentation.Level = "loose"
+	}
+	applyDefaultSlice(&cfg.Documentation.ScanRoots, []string{"internal", "cmd", "scripts"})
+	if cfg.Documentation.GoStyle == "" {
+		cfg.Documentation.GoStyle = "google"
+	}
+	if cfg.Documentation.PythonStyle == "" {
+		cfg.Documentation.PythonStyle = "numpy"
+	}
+	if cfg.Documentation.TypeScriptStyle == "" {
+		cfg.Documentation.TypeScriptStyle = "tsdoc"
+	}
+	applyDefaultSlice(&cfg.Documentation.PythonShebangRoots, []string{"scripts"})
+
 	applyDefaultSlice(&cfg.ScopeGuard.ForbiddenCalls, []string{
 		"os.WriteFile",
 		"os.Rename",
@@ -262,12 +326,14 @@ func ApplyPolicyConfigDefaults(cfg *PolicyConfig) error {
 	return nil
 }
 
+// applyDefaultSlice sets a slice to its default value if it is currently empty.
 func applyDefaultSlice(target *[]string, def []string) {
 	if len(*target) == 0 {
 		*target = def
 	}
 }
 
+// applyDefaultInt sets an integer to its default value if it is currently zero.
 func applyDefaultInt(target *int, def int) {
 	if *target == 0 {
 		*target = def
@@ -326,9 +392,102 @@ func ValidatePolicyConfig(cfg *PolicyConfig) error {
 		return fmt.Errorf("scope_guard: %w", err)
 	}
 
+	if err := validateRouterImportsConfig(&cfg.RouterImports); err != nil {
+		return fmt.Errorf("router_imports: %w", err)
+	}
+
+	if err := validateDocumentationConfig(&cfg.Documentation); err != nil {
+		return fmt.Errorf("documentation: %w", err)
+	}
+
 	return nil
 }
 
+// validateDocumentationConfig ensures the documentation levels and styles are valid choices.
+func validateDocumentationConfig(cfg *PolicyDocumentationConfig) error {
+	if !cfg.Enabled {
+		return nil
+	}
+
+	if cfg.Level != "loose" && cfg.Level != "strict" {
+		return fmt.Errorf("invalid level %q, must be \"loose\" or \"strict\"", cfg.Level)
+	}
+
+	validGoStyles := map[string]bool{"google": true, "standard": true, "presence_only": true}
+	if !validGoStyles[cfg.GoStyle] {
+		return fmt.Errorf("invalid go_style %q, allowed choices: google, standard, presence_only", cfg.GoStyle)
+	}
+
+	validPythonStyles := map[string]bool{
+		"google":           true,
+		"numpy":            true,
+		"restructuredtext": true,
+		"standard":         true,
+		"presence_only":    true,
+	}
+	if !validPythonStyles[cfg.PythonStyle] {
+		return fmt.Errorf("invalid python_style %q, allowed choices: google, numpy, restructuredtext, standard, presence_only", cfg.PythonStyle)
+	}
+
+	validTypeScriptStyles := map[string]bool{"tsdoc": true, "jsdoc": true, "standard": true, "presence_only": true}
+	if !validTypeScriptStyles[cfg.TypeScriptStyle] {
+		return fmt.Errorf("invalid typescript_style %q, allowed choices: tsdoc, jsdoc, standard, presence_only", cfg.TypeScriptStyle)
+	}
+
+	normalizedShebangRoots := make([]string, 0, len(cfg.PythonShebangRoots))
+	for _, root := range cfg.PythonShebangRoots {
+		normalizedRoot, err := normalizeDocumentationRoot(root)
+		if err != nil {
+			return fmt.Errorf("python_shebang_roots: %w", err)
+		}
+		normalizedShebangRoots = append(normalizedShebangRoots, normalizedRoot)
+	}
+	cfg.PythonShebangRoots = normalizedShebangRoots
+
+	return nil
+}
+
+// normalizeDocumentationRoot validates that a documentation scan root is repo-relative and safe.
+func normalizeDocumentationRoot(root string) (string, error) {
+	trimmed := strings.TrimSpace(root)
+	if trimmed == "" {
+		return "", fmt.Errorf("must not contain empty values")
+	}
+	if filepath.IsAbs(trimmed) {
+		return "", fmt.Errorf("must be repo-relative: %q", root)
+	}
+
+	normalizedRoot := utils.NormalizePolicyPath(trimmed)
+	if normalizedRoot == "" || normalizedRoot == "." {
+		return "", fmt.Errorf("must not point to the repository root: %q", root)
+	}
+	if normalizedRoot == ".." || strings.HasPrefix(normalizedRoot, "../") {
+		return "", fmt.Errorf("must stay within the repository: %q", root)
+	}
+
+	return normalizedRoot, nil
+}
+
+// validateRouterImportsConfig ensures required roots are non-empty when router enforcement is enabled.
+func validateRouterImportsConfig(cfg *PolicyRouterImportsConfig) error {
+	if !cfg.Enabled {
+		return nil
+	}
+
+	if len(cfg.BusinessRoots) == 0 {
+		return fmt.Errorf("business_roots must not be empty when enabled")
+	}
+	if len(cfg.AdapterRoots) == 0 {
+		return fmt.Errorf("adapter_roots must not be empty when enabled")
+	}
+	if len(cfg.RouterCoreRoots) == 0 {
+		return fmt.Errorf("router_core_roots must not be empty when enabled")
+	}
+
+	return nil
+}
+
+// validateScopeGuardConfig ensures the mode is a valid choice and normalizes allowed prefixes.
 func validateScopeGuardConfig(cfg *PolicyScopeGuardConfig) error {
 	switch cfg.Mode {
 	case ScopeGuardModeAllow, ScopeGuardModeRestrict, ScopeGuardModeBan:
@@ -349,6 +508,7 @@ func validateScopeGuardConfig(cfg *PolicyScopeGuardConfig) error {
 	return nil
 }
 
+// normalizeScopeGuardPrefix validates that a scope guard path prefix is repo-relative and safe.
 func normalizeScopeGuardPrefix(prefix string) (string, error) {
 	trimmed := strings.TrimSpace(prefix)
 	if trimmed == "" {

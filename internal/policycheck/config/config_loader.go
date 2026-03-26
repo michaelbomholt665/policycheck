@@ -1,4 +1,6 @@
 // internal/policycheck/config/config_loader.go
+// Package config handles the loading, normalization, and validation of the policy-gate.toml file.
+// It uses a strict TOML parser to ensure no unknown fields are present in the configuration.
 package config
 
 import (
@@ -10,6 +12,7 @@ import (
 )
 
 // Load decodes the raw TOML, applies defaults, and validates the configuration.
+//
 // The source parameter is used for error reporting (e.g. filename).
 func Load(source string, raw []byte) (*PolicyConfig, error) {
 	var cfg PolicyConfig
@@ -24,7 +27,7 @@ func Load(source string, raw []byte) (*PolicyConfig, error) {
 			var decodeErr *toml.DecodeError
 			if errors.As(err, &decodeErr) {
 				row, col := decodeErr.Position()
-				return nil, fmt.Errorf("%s:%d:%d: %w", source, row, col, err)
+				return nil, fmt.Errorf("%s:%d:%d: decode error: %w", source, row, col, err)
 			}
 			return nil, fmt.Errorf("%s: decode error: %w", source, err)
 		}

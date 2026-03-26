@@ -1,3 +1,6 @@
+// internal/policycheck/core/contracts/hardcoded_runtime_knob.go
+// Package contracts/hardcoded_runtime_knob flags config-like values that are hardcoded in Go code.
+// It ensures that parameters like timeouts and ports are driven by configuration rather than literals.
 package contracts
 
 import (
@@ -101,6 +104,7 @@ func ValidateHardcodedRuntimeKnobs(relPath string, content []byte, identifiers [
 	return violations
 }
 
+// buildKnobLookup converts a list of identifier strings into a fast-lookup map.
 func buildKnobLookup(identifiers []string) map[string]struct{} {
 	lookup := make(map[string]struct{}, len(identifiers))
 	for _, identifier := range identifiers {
@@ -114,6 +118,7 @@ func buildKnobLookup(identifiers []string) map[string]struct{} {
 	return lookup
 }
 
+// checkHardcodedValueSpec inspects a var/const declaration for hardcoded runtime knobs.
 func checkHardcodedValueSpec(spec *ast.ValueSpec, relPath string, fset *token.FileSet, lookup map[string]struct{}) []types.Violation {
 	var violations []types.Violation
 	for index, name := range spec.Names {
@@ -131,6 +136,7 @@ func checkHardcodedValueSpec(spec *ast.ValueSpec, relPath string, fset *token.Fi
 	return violations
 }
 
+// checkHardcodedAssignStmt inspects an assignment for hardcoded runtime knobs.
 func checkHardcodedAssignStmt(stmt *ast.AssignStmt, relPath string, fset *token.FileSet, lookup map[string]struct{}) []types.Violation {
 	var violations []types.Violation
 	for index, left := range stmt.Lhs {
@@ -149,6 +155,7 @@ func checkHardcodedAssignStmt(stmt *ast.AssignStmt, relPath string, fset *token.
 	return violations
 }
 
+// checkHardcodedKeyValueExpr inspects a struct field initialization for hardcoded runtime knobs.
 func checkHardcodedKeyValueExpr(expr *ast.KeyValueExpr, relPath string, fset *token.FileSet, lookup map[string]struct{}) []types.Violation {
 	keyName := extractKeyName(expr.Key)
 	if !matchesRuntimeKnob(keyName, lookup) || !containsHardcodedLiteral(expr.Value) {
@@ -158,6 +165,7 @@ func checkHardcodedKeyValueExpr(expr *ast.KeyValueExpr, relPath string, fset *to
 	return []types.Violation{newHardcodedRuntimeKnobViolation(relPath, keyName, fset.Position(expr.Pos()).Line)}
 }
 
+// extractAssignedIdentifier retrieves the terminal name of an assignment target (ident or selector).
 func extractAssignedIdentifier(expr ast.Expr) (string, bool) {
 	switch typed := expr.(type) {
 	case *ast.Ident:
@@ -169,6 +177,7 @@ func extractAssignedIdentifier(expr ast.Expr) (string, bool) {
 	}
 }
 
+// extractKeyName retrieves the terminal name of a key in a key-value expression.
 func extractKeyName(expr ast.Expr) string {
 	switch typed := expr.(type) {
 	case *ast.Ident:
@@ -180,6 +189,7 @@ func extractKeyName(expr ast.Expr) string {
 	}
 }
 
+// matchesRuntimeKnob checks if a name matches any identifier or suffix in the knob lookup.
 func matchesRuntimeKnob(name string, lookup map[string]struct{}) bool {
 	if name == "" {
 		return false
@@ -198,6 +208,7 @@ func matchesRuntimeKnob(name string, lookup map[string]struct{}) bool {
 	return false
 }
 
+// containsHardcodedLiteral recursively checks if an expression contains a basic literal value.
 func containsHardcodedLiteral(expr ast.Expr) bool {
 	switch typed := expr.(type) {
 	case *ast.BasicLit:
@@ -219,6 +230,7 @@ func containsHardcodedLiteral(expr ast.Expr) bool {
 	}
 }
 
+// exprListContainsHardcodedLiteral checks a list of expressions for any hardcoded literal.
 func exprListContainsHardcodedLiteral(exprs []ast.Expr) bool {
 	for _, expr := range exprs {
 		if containsHardcodedLiteral(expr) {
@@ -229,6 +241,7 @@ func exprListContainsHardcodedLiteral(exprs []ast.Expr) bool {
 	return false
 }
 
+// newHardcodedRuntimeKnobViolation creates a warning for a hardcoded value assigned to a knob.
 func newHardcodedRuntimeKnobViolation(relPath, name string, line int) types.Violation {
 	return types.Violation{
 		RuleID:   hardcodedRuntimeKnobRuleID,
@@ -240,6 +253,7 @@ func newHardcodedRuntimeKnobViolation(relPath, name string, line int) types.Viol
 	}
 }
 
+// normalizePolicyPrefixes converts path strings to slash-normalised repo-relative forms.
 func normalizePolicyPrefixes(prefixes []string) []string {
 	normalized := make([]string, 0, len(prefixes))
 	for _, prefix := range prefixes {

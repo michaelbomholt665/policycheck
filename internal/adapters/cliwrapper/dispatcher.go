@@ -1,4 +1,8 @@
 // internal/adapters/cliwrapper/dispatcher.go
+//
+// Package cliwrapper provides the implementation of the CLI-wrapper subsystem.
+// It detects and dispatches wrapper-specific commands such as package-gate
+// scanning, macro execution, and header formatting.
 package cliwrapper
 
 import (
@@ -118,17 +122,20 @@ func (d *WrapperDispatcher) Dispatch(ctx context.Context, args []string) error {
 	}
 }
 
+// staticWrapperConfigLoader returns a config loader that always returns cfg.
 func staticWrapperConfigLoader(cfg WrapperConfig) func() (WrapperConfig, error) {
 	return func() (WrapperConfig, error) {
 		return cfg, nil
 	}
 }
 
+// loadActiveDispatcherConfig returns the wrapper configuration from the host.
 func loadActiveDispatcherConfig() (WrapperConfig, error) {
 	return loadActiveAdapterConfig()
 }
 
 // dispatchPackageGate runs parse → pre-scan → exec for package-install commands.
+//
 // The security gate is resolved fresh from the router on each call.
 func (d *WrapperDispatcher) dispatchPackageGate(ctx context.Context, args []string) error {
 	req, err := ParseInstallRequest(args)
@@ -180,6 +187,7 @@ func (d *WrapperDispatcher) dispatchPassthrough(ctx context.Context, args []stri
 	return nil
 }
 
+// dispatchMacroRun resolves and executes a registered wrapper macro.
 func (d *WrapperDispatcher) dispatchMacroRun(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("dispatcher: macro run: empty args")
@@ -197,6 +205,7 @@ func (d *WrapperDispatcher) dispatchMacroRun(ctx context.Context, args []string)
 	return nil
 }
 
+// dispatchFormatHeaders resolves and executes the wrapper header formatter.
 func (d *WrapperDispatcher) dispatchFormatHeaders(ctx context.Context, args []string) error {
 	formatter, err := d.formatterResolver()
 	if err != nil {
@@ -230,6 +239,7 @@ func resolveSecurityGate() (ports.CLIWrapperSecurityGate, error) {
 	return gate, nil
 }
 
+// resolveMacroRunner resolves the CLIWrapperMacroRunner from the router.
 func resolveMacroRunner() (ports.CLIWrapperMacroRunner, error) {
 	raw, err := router.RouterResolveProvider(router.PortCLIWrapperMacroRunner)
 	if err != nil {
@@ -244,6 +254,7 @@ func resolveMacroRunner() (ports.CLIWrapperMacroRunner, error) {
 	return runner, nil
 }
 
+// resolveFormatter resolves the CLIWrapperFormatter from the router.
 func resolveFormatter() (ports.CLIWrapperFormatter, error) {
 	raw, err := router.RouterResolveProvider(router.PortCLIWrapperFormatter)
 	if err != nil {
@@ -268,6 +279,7 @@ func collectMacroNames(cfg WrapperConfig) []string {
 	return names
 }
 
+// parseFormatHeadersArgs parses CLI flags for the header-formatting command.
 func parseFormatHeadersArgs(args []string) (bool, []string, error) {
 	if len(args) < 3 {
 		return false, nil, fmt.Errorf("expected '<tool> fmt headers'")

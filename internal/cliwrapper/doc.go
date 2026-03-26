@@ -1,3 +1,6 @@
+// internal/cliwrapper/doc.go
+// Documents the wrapper package's domain logic and configuration responsibilities.
+// Keeps the package overview compliant with the repository header policy.
 // Package cliwrapper Provides application-layer logic for the CLI wrapper subsystem.
 //
 // Package Concerns:

@@ -1,4 +1,6 @@
+// internal/policycheck/core/policy_registry.go
 // Package core implements the core policy engine.
+// It maintains the registry of all active policy checks and their categories.
 package core
 
 import (
@@ -36,11 +38,13 @@ var PolicyRegistry = map[string][]PolicyCheckFunc{
 	"hygiene": {
 		hygiene.CheckSymbolNames,
 		hygiene.CheckDocStyle,
+		hygiene.CheckDocumentation,
 	},
 	"structure": {
 		structure.CheckTestLocation,
 		structure.CheckPackageRules,
 		structure.CheckArchitecture,
+		structure.CheckRouterImports,
 	},
 	"custom": {
 		custom.CheckCustomRules,

@@ -1,4 +1,6 @@
 // internal/cliwrapper/package_parser.go
+// Parses package-manager install commands into normalized wrapper request objects.
+// Centralizes manager-specific metadata for security gate and lockfile workflows.
 package cliwrapper
 
 import (
@@ -88,6 +90,7 @@ func ParseInstallRequest(args []string) (InstallRequest, error) {
 }
 
 // extractPackages returns the package specifiers that follow the subcommand.
+//
 // Returns nil (not an error) when no packages are listed after the subcommand.
 func extractPackages(args []string) []string {
 	if len(args) <= 2 {

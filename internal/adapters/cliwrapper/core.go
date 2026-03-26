@@ -1,3 +1,4 @@
+// internal/adapters/cliwrapper/core.go
 package cliwrapper
 
 import (
@@ -121,6 +122,7 @@ func (d WrapperDetector) Detect(args []string, macroNames []string) WrapperMode 
 	return ModePassthrough
 }
 
+// isMacroRun reports whether name matches an entry in macroNames.
 func isMacroRun(name string, macroNames []string) bool {
 	for _, macroName := range macroNames {
 		if macroName == name {
@@ -131,6 +133,7 @@ func isMacroRun(name string, macroNames []string) bool {
 	return false
 }
 
+// isFormatHeaders reports whether args represent a header-formatting command.
 func isFormatHeaders(args []string) bool {
 	if len(args) < 3 {
 		return false
@@ -144,6 +147,7 @@ func isFormatHeaders(args []string) bool {
 	return sliceContains(subcommands, args[1]) && sliceContains(subcommands, args[2])
 }
 
+// isPackageGate reports whether args represent a package-management command.
 func isPackageGate(args []string) bool {
 	if len(args) < 2 {
 		return false
@@ -157,10 +161,12 @@ func isPackageGate(args []string) bool {
 	return sliceContains(subcommands, args[1])
 }
 
+// isToolingGate reports whether name is a recognized tool-manager binary.
 func isToolingGate(name string) bool {
 	return sliceContains(toolingGateManagers, name)
 }
 
+// sliceContains reports whether target exists within values.
 func sliceContains(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {
@@ -300,6 +306,7 @@ func ParseInstallRequest(args []string) (InstallRequest, error) {
 	}, nil
 }
 
+// extractPackages returns a slice of package names from CLI args.
 func extractPackages(args []string) []string {
 	if len(args) <= 2 {
 		return nil
@@ -311,6 +318,7 @@ func extractPackages(args []string) []string {
 	return packages
 }
 
+// subcmdOrEmpty returns the subcommand from args or a placeholder string.
 func subcmdOrEmpty(args []string) string {
 	if len(args) >= 2 {
 		return args[1]

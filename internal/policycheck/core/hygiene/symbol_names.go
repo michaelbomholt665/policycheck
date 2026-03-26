@@ -1,4 +1,6 @@
 // internal/policycheck/core/hygiene/symbol_names.go
+// Package hygiene/symbol_names implements naming convention checks for Go symbols.
+// It verifies acronym casing and minimum token counts for exported identifiers.
 package hygiene
 
 import (
@@ -61,6 +63,7 @@ func resolveScanRoots(cfg config.PolicyConfig) []string {
 }
 
 // collectSymbolViolations is the per-entry callback for the directory walk.
+//
 // It filters non-Go files and excluded paths before delegating to file-level checks.
 func collectSymbolViolations(
 	root, path string,
@@ -121,6 +124,7 @@ func checkFileSymbolNames(root, path string, cfg config.PolicyConfig) []types.Vi
 }
 
 // resolveMinTokens returns the effective minimum token count for a file.
+//
 // Cross-backend surface files require 3 tokens; all others require the configured
 // minimum, defaulting to 2 when not set.
 func resolveMinTokens(rel string, configured int, crossBackendConfigured int) int {
@@ -186,6 +190,7 @@ func checkValueSpec(decl *ast.ValueSpec, rel string, fset *token.FileSet, minTok
 }
 
 // validateSymbol runs all naming checks against a single exported symbol name.
+//
 // Acronym casing is checked first; token count is checked second.
 func validateSymbol(rel, name string, minTokens, line int) []types.Violation {
 	if v := checkAcronymCasing(rel, name, line); v != nil {
@@ -250,6 +255,7 @@ func checkTokenCount(rel, name string, minTokens, line int) *types.Violation {
 }
 
 // CountTokens counts the number of semantic tokens in a Go identifier.
+//
 // It handles CamelCase, acronym runs (e.g. HTTP), and underscore-separated names.
 func CountTokens(name string) int {
 	if name == "main" {

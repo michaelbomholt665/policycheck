@@ -1,4 +1,6 @@
 // internal/policycheck/core/contracts/ai_compatibility.go
+// Package contracts/ai_compatibility enforces the presence of required AI flags in CLI commands.
+// It ensures that all entry-point commands remain compatible with AI-driven execution models.
 package contracts
 
 import (

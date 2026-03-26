@@ -1,4 +1,6 @@
 // internal/ports/cliwrapper_macro_port.go
+// Declares the router port for wrapper macro execution capabilities.
+// Keeps macro invocation wired through contracts at the router boundary.
 package ports
 
 import "context"

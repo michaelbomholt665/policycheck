@@ -1,4 +1,6 @@
 // internal/ports/config.go
+// Declares the router port for raw configuration access.
+// Keeps config consumers bound to a small provider contract at the boundary.
 package ports
 
 // ConfigProvider defines the contract for providing raw configuration.

@@ -23,7 +23,14 @@ type PolicyFact = {
 	end_line: number;
 	complexity: number;
 	param_count: number;
+	params: string[];
 	symbol_kind: string;
+	docstring: string;
+};
+
+type CommentRange = {
+	kind: ts.CommentKind;
+	text: string;
 };
 
 type WorkerRequest =
@@ -50,6 +57,17 @@ function isCountedFunctionLike(node: ts.Node): node is ts.FunctionDeclaration | 
 function emitFact(sourceFile: ts.SourceFile, relPath: string, name: string, symbolKind: string, node: ts.Node): void {
 	const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
 	const endLine = sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
+
+	let paramCount = 0;
+	let params: string[] = [];
+	let docstring = '';
+
+	if (isCountedFunctionLike(node)) {
+		paramCount = node.parameters.length;
+		params = node.parameters.map((p) => p.name.getText(sourceFile));
+		docstring = extractLeadingDocumentation(sourceFile, node);
+	}
+
 	const fact: PolicyFact = {
 		kind: FACT_KIND,
 		language: 'typescript',
@@ -58,10 +76,64 @@ function emitFact(sourceFile: ts.SourceFile, relPath: string, name: string, symb
 		line_number: start,
 		end_line: endLine,
 		complexity: calculateComplexity(node),
-		param_count: isCountedFunctionLike(node) ? node.parameters.length : 0,
+		param_count: paramCount,
+		params: params,
 		symbol_kind: symbolKind,
+		docstring: docstring,
 	};
 	process.stdout.write(JSON.stringify(fact) + '\n');
+}
+
+/**
+ * Returns attached leading comments for a node when they are directly adjacent.
+ */
+function leadingCommentRanges(sourceFile: ts.SourceFile, node: ts.Node): CommentRange[] {
+	const ranges = ts.getLeadingCommentRanges(sourceFile.text, node.getFullStart()) ?? [];
+	if (ranges.length === 0) {
+		return [];
+	}
+
+	const attached: CommentRange[] = [];
+	let expectedEnd = node.getStart(sourceFile);
+	for (let i = ranges.length - 1; i >= 0; i -= 1) {
+		const range = ranges[i];
+		const between = sourceFile.text.slice(range.end, expectedEnd);
+		if (!isDirectlyAttachedCommentGap(between)) {
+			break;
+		}
+
+		attached.unshift({
+			kind: range.kind,
+			text: sourceFile.text.slice(range.pos, range.end),
+		});
+		expectedEnd = range.pos;
+	}
+
+	return attached;
+}
+
+/**
+ * Reports whether the gap between a comment and node is small enough to count as attached.
+ */
+function isDirectlyAttachedCommentGap(gap: string): boolean {
+	if (gap.trim() !== '') {
+		return false;
+	}
+
+	const newlineCount = (gap.match(/\n/g) ?? []).length;
+	return newlineCount <= 1;
+}
+
+/**
+ * Extracts the directly attached documentation comment text for a node.
+ */
+function extractLeadingDocumentation(sourceFile: ts.SourceFile, node: ts.Node): string {
+	const comments = leadingCommentRanges(sourceFile, node);
+	if (comments.length === 0) {
+		return '';
+	}
+
+	return comments.map((comment) => comment.text).join('\n');
 }
 
 /**

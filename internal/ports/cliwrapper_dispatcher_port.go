@@ -1,4 +1,6 @@
 // internal/ports/cliwrapper_dispatcher_port.go
+// Declares the router port for wrapper command dispatch orchestration.
+// Keeps wrapper dispatch consumers bound to contracts instead of concrete adapters.
 package ports
 
 import "context"

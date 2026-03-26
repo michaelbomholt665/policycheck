@@ -1,3 +1,6 @@
+// internal/policycheck/core/quality/func_quality.go
+// Package quality implements code quality policy checks.
+// It verifies function-level metrics like complexity and parameter counts.
 package quality
 
 import (
@@ -35,6 +38,7 @@ func CheckFunctionQualityPolicies(ctx context.Context, root string, cfg config.P
 	return EvaluateFunctionQualityFacts(facts, cfg)
 }
 
+// filterFunctionQualityFactsByRoots limits evaluation to files within specified roots.
 func filterFunctionQualityFactsByRoots(facts []types.PolicyFact, roots []string) []types.PolicyFact {
 	if len(roots) == 0 {
 		return facts
@@ -72,6 +76,7 @@ func EvaluateFunctionQualityFacts(facts []types.PolicyFact, cfg config.PolicyCon
 	return viols
 }
 
+// evaluateSingleFact checks a single function's metrics against all quality thresholds.
 func evaluateSingleFact(fact types.PolicyFact, cfg config.PolicyFunctionQualityConfig) ([]types.Violation, []types.Violation) {
 	var viols []types.Violation
 	var mildWarnings []types.Violation
@@ -106,6 +111,7 @@ func evaluateSingleFact(fact types.PolicyFact, cfg config.PolicyFunctionQualityC
 	return viols, mildWarnings
 }
 
+// resolveLanguageLOCLimits determined the applicable LOC limits for a given language.
 func resolveLanguageLOCLimits(language string, cfg config.PolicyFunctionQualityConfig) (int, int) {
 	switch language {
 	case "python":
@@ -119,6 +125,7 @@ func resolveLanguageLOCLimits(language string, cfg config.PolicyFunctionQualityC
 	}
 }
 
+// appendComplexityViolations checks complexity thresholds and adds weighted-warnings or errors.
 func appendComplexityViolations(
 	viols []types.Violation,
 	mildWarnings []types.Violation,
@@ -144,6 +151,7 @@ func appendComplexityViolations(
 	return viols, mildWarnings
 }
 
+// appendParameterViolations checks the function's parameter count against limits.
 func appendParameterViolations(
 	viols []types.Violation,
 	fact types.PolicyFact,
@@ -160,6 +168,7 @@ func appendParameterViolations(
 	return viols
 }
 
+// newFuncViolation creates a standardized quality violation for a function.
 func newFuncViolation(fact types.PolicyFact, severity, msg string) types.Violation {
 	return types.Violation{
 		RuleID:   "function-quality",

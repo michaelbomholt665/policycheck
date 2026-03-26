@@ -1,4 +1,6 @@
 // internal/cliwrapper/config.go
+// Defines wrapper configuration types and validation helpers for CLI policy.
+// Keeps wrapper config parsing separate from command execution code paths.
 package cliwrapper
 
 import (
@@ -30,6 +32,7 @@ var severityNames = map[string]Severity{
 }
 
 // ParseSeverity converts a string label to a Severity value.
+//
 // Returns an error if the label is not recognised.
 func ParseSeverity(s string) (Severity, error) {
 	if v, ok := severityNames[s]; ok {
@@ -40,6 +43,7 @@ func ParseSeverity(s string) (Severity, error) {
 }
 
 // SeverityAtLeast reports whether candidate is at least as strict as base.
+//
 // Returns true if candidate >= base.
 func SeverityAtLeast(candidate, base Severity) bool {
 	return candidate >= base
@@ -99,6 +103,7 @@ type WrapperConfig struct {
 }
 
 // ValidateWrapperConfig verifies structural correctness of a WrapperConfig.
+//
 // It does not enforce cross-config merge ordering rules; use
 // ValidateConfigStrictnessOrder for that.
 func ValidateWrapperConfig(cfg WrapperConfig) error {

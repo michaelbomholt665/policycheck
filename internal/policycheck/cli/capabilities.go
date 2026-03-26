@@ -1,3 +1,7 @@
+// internal/policycheck/cli/capabilities.go
+// Package cli provides CLI-specific capabilities and rendering helpers.
+// It manages the resolution and use of optional router-native stylers and
+// interactors for the policycheck command line interface.
 package cli
 
 import (
@@ -40,6 +44,7 @@ func ResolveRenderers() (Renderers, error) {
 	}, nil
 }
 
+// resolveOptionalOutputStyler resolves the CLIOutputStyler from the router.
 func resolveOptionalOutputStyler() (capabilities.CLIOutputStyler, error) {
 	styler, err := capabilities.ResolveCLIOutputStyler()
 	if err == nil || isOptionalCapabilityUnavailable(err) {
@@ -49,6 +54,7 @@ func resolveOptionalOutputStyler() (capabilities.CLIOutputStyler, error) {
 	return nil, fmt.Errorf("resolve CLI output styler: %w", err)
 }
 
+// resolveOptionalChromeStyler resolves the CLIChromeStyler from the router.
 func resolveOptionalChromeStyler() (capabilities.CLIChromeStyler, error) {
 	styler, err := capabilities.ResolveCLIChromeStyler()
 	if err == nil || isOptionalCapabilityUnavailable(err) {
@@ -58,6 +64,7 @@ func resolveOptionalChromeStyler() (capabilities.CLIChromeStyler, error) {
 	return nil, fmt.Errorf("resolve CLI chrome styler: %w", err)
 }
 
+// resolveOptionalInteractor resolves the CLIInteractor from the router.
 func resolveOptionalInteractor() (capabilities.CLIInteractor, error) {
 	interactor, err := capabilities.ResolveCLIInteractor()
 	if err == nil || isOptionalCapabilityUnavailable(err) {
@@ -67,6 +74,7 @@ func resolveOptionalInteractor() (capabilities.CLIInteractor, error) {
 	return nil, fmt.Errorf("resolve CLI interactor: %w", err)
 }
 
+// isOptionalCapabilityUnavailable reports whether err indicates a missing router port.
 func isOptionalCapabilityUnavailable(err error) bool {
 	var routerErr *router.RouterError
 	if !errors.As(err, &routerErr) {
@@ -76,6 +84,7 @@ func isOptionalCapabilityUnavailable(err error) bool {
 	return routerErr.Code == router.PortNotFound
 }
 
+// styleChromeText applies a chrome style to the given input string.
 func styleChromeText(chrome capabilities.CLIChromeStyler, kind, input string) (string, error) {
 	if chrome == nil {
 		return input, nil
@@ -89,6 +98,7 @@ func styleChromeText(chrome capabilities.CLIChromeStyler, kind, input string) (s
 	return styled, nil
 }
 
+// styleChromeLayout applies a chrome layout style to the given title and content.
 func styleChromeLayout(chrome capabilities.CLIChromeStyler, kind, title string, content ...string) (string, error) {
 	if chrome == nil {
 		return renderPlainLayout(title, content...), nil
@@ -102,6 +112,7 @@ func styleChromeLayout(chrome capabilities.CLIChromeStyler, kind, title string, 
 	return styled, nil
 }
 
+// printRouterWarnings styles and prints router-provider resolution warnings to stderr.
 func printRouterWarnings(chrome capabilities.CLIChromeStyler, warnings []error) {
 	for _, warningErr := range warnings {
 		if warningErr == nil {
@@ -119,6 +130,7 @@ func printRouterWarnings(chrome capabilities.CLIChromeStyler, warnings []error) 
 	}
 }
 
+// printInteractiveFallbackNotice prints a warning when the interactive capability is missing.
 func printInteractiveFallbackNotice(chrome capabilities.CLIChromeStyler) {
 	message := "interactive CLI capability unavailable; falling back to static rule descriptions"
 	styled, err := styleChromeText(chrome, capabilities.TextKindMuted, message)

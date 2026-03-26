@@ -1,4 +1,6 @@
 // internal/policycheck/core/contracts/go_version.go
+// Package contracts/go_version enforces language and toolchain version consistency.
+// It verifies both the go.mod pins and the actual tool versions used in workflow files.
 package contracts
 
 import (
@@ -51,6 +53,7 @@ func CheckGoVersion(ctx context.Context, root string, cfg config.PolicyConfig) [
 	return viols
 }
 
+// scanForVersionMismatches checks related files (Dockerfile, CI) for Go version consistency.
 func scanForVersionMismatches(root, goVersion string) []types.Violation {
 	var viols []types.Violation
 
@@ -68,6 +71,7 @@ func scanForVersionMismatches(root, goVersion string) []types.Violation {
 	return viols
 }
 
+// scanFileForGoVersionMismatch performs a line-by-line check for Go version discrepancies in a file.
 func scanFileForGoVersionMismatch(root, file, goVersion string) []types.Violation {
 	var viols []types.Violation
 	path := filepath.Join(root, filepath.FromSlash(file))

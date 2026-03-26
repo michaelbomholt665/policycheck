@@ -1,4 +1,6 @@
 // internal/ports/walk.go
+// Declares the router port for filesystem tree traversal used by policy checks.
+// Keeps walking behavior replaceable in tests and host integrations.
 package ports
 
 import "io/fs"

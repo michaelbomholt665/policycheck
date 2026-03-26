@@ -1,3 +1,9 @@
+// internal/policycheck/cli/catalog.go
+// Package cli Provides the user-facing command line interface for policycheck.
+// Defines the core orchestration logic for running checks from the terminal.
+// Includes support for interactive exploring and grouped violation reporting.
+// Provides a registry of all policy rules enforced by the checker.
+// Categorizes and documents each rule for both CLI and API consumption.
 package cli
 
 import (
@@ -69,6 +75,16 @@ Acronym Casing: Enforces standard Go casing (for example, HTTPClient, not HttpCl
 		Description: `Prefix Rule: Comments must start with the symbol name.
 Substance: Minimum 5 words required to avoid tautological comments.
 Cleanup: Flags TODO/FIXME markers left in exported documentation.`,
+	},
+	{
+		ID:       "hygiene.documentation",
+		Name:     "Documentation Coverage",
+		Category: "hygiene",
+		Summary:  "Enforces file headers and function documentation across Go, Python, and TypeScript.",
+		Description: `Header Rules: Enforces repo-relative path headers plus 2-5 descriptive comment lines.
+Strictness: Uses documentation.level to switch between loose presence checks and strict style validation.
+Style Matrix: Supports Go google/standard/presence_only, Python google/numpy/restructuredtext/standard/presence_only, and TypeScript tsdoc/jsdoc/standard/presence_only.
+Python Shebangs: Enforces shebangs only for files under documentation.python_shebang_roots when strict mode requires them.`,
 	},
 	{
 		ID:       "secret-keyword",
@@ -264,6 +280,7 @@ func RunInteractivePolicyCatalog(renderers Renderers) error {
 	}
 }
 
+// runInteractiveGroupView provides a selection menu for policy groups and displays their check counts.
 func runInteractiveGroupView(renderers Renderers) error {
 	groups := collectPolicyGroups()
 	options := make([]capabilities.Choice, 0, len(groups))
@@ -310,6 +327,7 @@ func runInteractiveGroupView(renderers Renderers) error {
 	return fmt.Errorf("select policy group: unknown group %q", selectedGroup)
 }
 
+// runInteractiveRuleView provides a selection menu for policy rules and displays their detailed descriptions.
 func runInteractiveRuleView(renderers Renderers) error {
 	options := make([]capabilities.Choice, 0, len(policyRulesCatalog))
 	for _, rule := range policyRulesCatalog {
@@ -345,6 +363,7 @@ func runInteractiveRuleView(renderers Renderers) error {
 	return fmt.Errorf("select policy rule: unknown rule %q", selectedRuleID)
 }
 
+// printRuleDetail renders the full ID, category, summary, and description of a single policy rule.
 func printRuleDetail(chrome capabilities.CLIChromeStyler, rule policyRule) error {
 	body := strings.Join([]string{
 		fmt.Sprintf("Rule ID: %s", rule.ID),
@@ -367,6 +386,7 @@ func printRuleDetail(chrome capabilities.CLIChromeStyler, rule policyRule) error
 	return nil
 }
 
+// collectPolicyGroups aggregates and sorts policy group summaries from the core registry.
 func collectPolicyGroups() []policyGroupSummary {
 	groups := make([]policyGroupSummary, 0, len(core.PolicyRegistry))
 	for name, checks := range core.PolicyRegistry {
@@ -383,6 +403,7 @@ func collectPolicyGroups() []policyGroupSummary {
 	return groups
 }
 
+// renderPlainLayout applies a basic title/body layout without any chrome or styling.
 func renderPlainLayout(title string, content ...string) string {
 	body := strings.Join(content, "\n")
 	if title == "" {

@@ -1,4 +1,6 @@
 // internal/policycheck/cli/errors.go
+// Package cli/errors handles top-level CLI error reporting and exit code mapping.
+// It provides consistent formatting for errors sent to the user's terminal.
 package cli
 
 import (

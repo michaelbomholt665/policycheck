@@ -1,4 +1,6 @@
 // internal/policycheck/core/hygiene/doc_style.go
+// Package hygiene/doc_style performs quality checks on symbol-level documentation.
+// It verifies word counts, prefixes, and prohibited markers on exported Go symbols.
 package hygiene
 
 import (
@@ -174,6 +176,7 @@ func checkValueDoc(spec *ast.ValueSpec, declDoc *ast.CommentGroup, rel string, f
 }
 
 // validateSymbolDoc runs presence and quality checks against a symbol's doc comment.
+//
 // When requirePrefix is true, the comment must begin with the symbol name.
 func validateSymbolDoc(rel, name, kind string, doc *ast.CommentGroup, line int, requirePrefix bool) []types.Violation {
 	if requirePrefix && !HasDocWithPrefix(doc, name) {

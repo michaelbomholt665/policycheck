@@ -1,4 +1,6 @@
 // internal/cliwrapper/request.go
+// Defines wrapper request and ecosystem value types shared across the subsystem.
+// Keeps common wrapper domain models free of adapter dependencies and side effects.
 
 // Package cliwrapper provides the core domain types and pure functions for the
 // CLI wrapper subsystem.

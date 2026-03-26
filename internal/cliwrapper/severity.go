@@ -1,4 +1,6 @@
 // internal/cliwrapper/severity.go
+// Evaluates wrapper security severities and blocking decisions for advisories.
+// Keeps severity threshold logic pure so callers can test decisions deterministically.
 package cliwrapper
 
 import "fmt"

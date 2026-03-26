@@ -1,3 +1,6 @@
+// internal/cliwrapper/walker.go
+// Formats repository file headers for supported source languages in wrapper flows.
+// Applies path-comment normalization while preserving language-specific file handling.
 package cliwrapper
 
 import (
@@ -251,6 +254,7 @@ func InjectHeader(content string, language string, relPath string) (string, erro
 	}
 }
 
+// normalizeHeaderFilter validates and normalizes the requested language filter set.
 func normalizeHeaderFilter(only []string) (map[string]bool, error) {
 	filter := map[string]bool{
 		"go":         true,
@@ -278,6 +282,7 @@ func normalizeHeaderFilter(only []string) (map[string]bool, error) {
 	return filter, nil
 }
 
+// shouldSkipHeaderPath reports whether relPath contains a directory excluded from header formatting.
 func shouldSkipHeaderPath(relPath string) bool {
 	parts := strings.Split(relPath, "/")
 	return slices.ContainsFunc(parts[:max(0, len(parts)-1)], func(part string) bool {
@@ -286,6 +291,7 @@ func shouldSkipHeaderPath(relPath string) bool {
 	})
 }
 
+// injectSlashCommentHeader inserts or replaces the leading path header for Go and TypeScript files.
 func injectSlashCommentHeader(lines []string, newline string, relPath string) string {
 	header := "// " + relPath
 	body := append([]string(nil), lines...)
@@ -298,6 +304,7 @@ func injectSlashCommentHeader(lines []string, newline string, relPath string) st
 	return joinLines(append([]string{header}, body...), newline)
 }
 
+// injectPythonHeader inserts or replaces the shebang-aware path header for Python files.
 func injectPythonHeader(lines []string, newline string, relPath string) string {
 	body := append([]string(nil), lines...)
 	shebang := defaultPythonShebang
@@ -315,6 +322,7 @@ func injectPythonHeader(lines []string, newline string, relPath string) string {
 	return joinLines(append([]string{shebang, "# " + relPath}, body...), newline)
 }
 
+// headerComment renders the expected path header comment for one supported language.
 func headerComment(language string, relPath string) (string, error) {
 	switch language {
 	case "go", "typescript":
@@ -326,6 +334,7 @@ func headerComment(language string, relPath string) (string, error) {
 	}
 }
 
+// parseHeaderPath extracts a repo-relative header path from one language-specific comment line.
 func parseHeaderPath(line string, language string) (string, bool) {
 	switch language {
 	case "go", "typescript":
@@ -343,6 +352,7 @@ func parseHeaderPath(line string, language string) (string, bool) {
 	}
 }
 
+// firstLines returns up to count leading logical lines from content.
 func firstLines(content string, count int) []string {
 	lines := splitLines(content)
 	if len(lines) > count {
@@ -352,6 +362,7 @@ func firstLines(content string, count int) []string {
 	return lines
 }
 
+// splitLines returns content split on normalized newlines without a trailing empty record.
 func splitLines(content string) []string {
 	if content == "" {
 		return nil
@@ -365,6 +376,7 @@ func splitLines(content string) []string {
 	return lines
 }
 
+// detectNewline reports the preferred newline sequence for rewritten output.
 func detectNewline(content string) string {
 	if strings.Contains(content, "\r\n") {
 		return "\r\n"
@@ -373,10 +385,12 @@ func detectNewline(content string) string {
 	return "\n"
 }
 
+// normalizeNewlines rewrites CRLF input to LF for stable header processing.
 func normalizeNewlines(content string) string {
 	return strings.ReplaceAll(content, "\r\n", "\n")
 }
 
+// joinLines reassembles lines using the selected newline sequence and a trailing newline.
 func joinLines(lines []string, newline string) string {
 	return strings.Join(lines, newline) + newline
 }

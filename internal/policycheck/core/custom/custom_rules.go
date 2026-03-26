@@ -1,4 +1,6 @@
 // internal/policycheck/core/custom/custom_rules.go
+// Package custom implements user-defined regex-based policy checks.
+// It allows for project-specific rules to be defined in the policy configuration.
 package custom
 
 import (
@@ -46,6 +48,7 @@ func CheckCustomRules(ctx context.Context, root string, cfg config.PolicyConfig)
 	return violations
 }
 
+// getScanRoots determines the set of directories to scan for a custom rule.
 func getScanRoots(root string, cfg config.PolicyConfig, rule config.PolicyCustomRule) []string {
 	if rule.FileGlob == "" && len(cfg.Paths.ProductionRoots) > 0 {
 		roots := make([]string, 0, len(cfg.Paths.ProductionRoots))
@@ -57,6 +60,7 @@ func getScanRoots(root string, cfg config.PolicyConfig, rule config.PolicyCustom
 	return []string{root}
 }
 
+// scanCustomRule performs a regex-based scan of files matching the rule's criteria.
 func scanCustomRule(root, scanRoot string, rule config.PolicyCustomRule, walk directoryWalker) []types.Violation {
 	var violations []types.Violation
 	_ = walk.WalkDirectoryTree(scanRoot, func(path string, d fs.DirEntry, err error) error {

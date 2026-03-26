@@ -60,4 +60,28 @@ func TestApplyPolicyConfigDefaults(t *testing.T) {
 		"os.MkdirAll",
 	}, cfg.ScopeGuard.ForbiddenCalls)
 	assert.Empty(t, cfg.ScopeGuard.AllowedPathPrefixes)
+
+	// Router Imports
+	assert.Equal(t, []string{"internal/policycheck", "internal/cliwrapper", "internal/ports"}, cfg.RouterImports.BusinessRoots)
+	assert.Equal(t, []string{"internal/adapters"}, cfg.RouterImports.AdapterRoots)
+	assert.Equal(t, []string{"internal/router"}, cfg.RouterImports.RouterCoreRoots)
+	assert.Equal(t, []string{"internal/app", "internal/router/ext"}, cfg.RouterImports.RouterBootRoots)
+	assert.Equal(t, []string{
+		"policycheck/internal/ports",
+		"policycheck/internal/router",
+		"policycheck/internal/router/capabilities",
+	}, cfg.RouterImports.AllowedBusinessImports)
+	assert.Equal(t, []string{
+		"policycheck/internal/adapters/",
+		"policycheck/internal/router/ext/",
+	}, cfg.RouterImports.ForbiddenBusinessImportPrefixes)
+	assert.True(t, cfg.RouterImports.ForbiddenAdapterToAdapter)
+
+	// Documentation
+	assert.Equal(t, "loose", cfg.Documentation.Level)
+	assert.Equal(t, []string{"internal", "cmd", "scripts"}, cfg.Documentation.ScanRoots)
+	assert.Equal(t, "google", cfg.Documentation.GoStyle)
+	assert.Equal(t, "numpy", cfg.Documentation.PythonStyle)
+	assert.Equal(t, "tsdoc", cfg.Documentation.TypeScriptStyle)
+	assert.Equal(t, []string{"scripts"}, cfg.Documentation.PythonShebangRoots)
 }

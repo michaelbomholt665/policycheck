@@ -1,4 +1,6 @@
 // internal/policycheck/core/security/secret_catalog.go
+// Package security/secret_catalog maintains the database of known secret patterns.
+// It provides the regex rules used for identifying potential sensitive information.
 package security
 
 import (

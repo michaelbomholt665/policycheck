@@ -1,4 +1,6 @@
 // internal/policycheck/core/contracts/scope_guard.go
+// Package contracts/scope_guard enforces restrictions on OS-level lifecycle calls.
+// It ensures that forbidden calls like os.WriteFile only occur in approved adapter packages.
 package contracts
 
 import (
@@ -17,6 +19,7 @@ import (
 )
 
 // CheckScopeGuard evaluates the scope guard policy across all files under root.
+//
 // It checks for forbidden lifecycle calls in scanned source files.
 func CheckScopeGuard(ctx context.Context, root string, cfg config.PolicyConfig) []types.Violation {
 	if !cfg.ScopeGuard.Enabled {
@@ -83,6 +86,7 @@ func ValidateScopeGuard(relPath string, content string, cfg config.PolicyConfig)
 	return viols, nil
 }
 
+// shouldSkipScopeGuard determines if a file is exempt from scope guard checks based on its path.
 func shouldSkipScopeGuard(relPath string, cfg config.PolicyScopeGuardConfig) bool {
 	switch cfg.Mode {
 	case config.ScopeGuardModeAllow:
@@ -116,6 +120,7 @@ func checkForbiddenCalls(relPath, content string, cfg config.PolicyConfig) []typ
 	return viols
 }
 
+// checkGoForbiddenCalls uses AST parsing to find forbidden lifecycle calls in Go source code.
 func checkGoForbiddenCalls(relPath, content string, cfg config.PolicyConfig) []types.Violation {
 	fileSet := token.NewFileSet()
 	file, err := parser.ParseFile(fileSet, relPath, content, parser.SkipObjectResolution)
@@ -161,6 +166,7 @@ func checkGoForbiddenCalls(relPath, content string, cfg config.PolicyConfig) []t
 	return viols
 }
 
+// checkStringForbiddenCalls fallback uses simple string matching for forbidden calls.
 func checkStringForbiddenCalls(relPath, content string, cfg config.PolicyConfig) []types.Violation {
 	var viols []types.Violation
 	for _, call := range cfg.ScopeGuard.ForbiddenCalls {

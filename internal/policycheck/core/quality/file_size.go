@@ -1,4 +1,6 @@
+// internal/policycheck/core/quality/file_size.go
 // Package quality implements code quality policy checks.
+// It monitors file size and enforces limits based on code complexity metrics.
 //
 // Package Concerns:
 //   - File size monitoring with CTX-based penalties
@@ -53,6 +55,7 @@ func CheckFileSizePolicies(ctx context.Context, root string, cfg config.PolicyCo
 	return viols
 }
 
+// calculateComplexityPenalties aggregates function complexity into per-file penalty counts.
 func calculateComplexityPenalties(facts []types.PolicyFact, cfg config.PolicyConfig) (warnCtxFuncs, hardCtxFuncs map[string]int) {
 	warnCtxFuncs = make(map[string]int)
 	hardCtxFuncs = make(map[string]int)
@@ -71,6 +74,7 @@ type directoryWalker interface {
 	WalkDirectoryTree(root string, fn fs.WalkDirFunc) error
 }
 
+// walkAndEvaluateFileSize traverses the directory tree and evaluates each file's size.
 func walkAndEvaluateFileSize(root string, cfg config.PolicyConfig, walk directoryWalker, warnCtxFuncs, hardCtxFuncs map[string]int) ([]types.Violation, error) {
 	var viols []types.Violation
 	err := walk.WalkDirectoryTree(root, func(path string, d fs.DirEntry, err error) error {
@@ -98,6 +102,7 @@ func walkAndEvaluateFileSize(root string, cfg config.PolicyConfig, walk director
 	return viols, err
 }
 
+// appendErrorViol is a helper to add an error-level violation to a results slice.
 func appendErrorViol(viols []types.Violation, ruleID, msg string) []types.Violation {
 	return append(viols, types.Violation{
 		RuleID:   ruleID,

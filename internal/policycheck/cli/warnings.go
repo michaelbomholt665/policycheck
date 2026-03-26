@@ -1,4 +1,6 @@
 // internal/policycheck/cli/warnings.go
+// Package cli/warnings implements the logic for formatting and summarizing policy violations.
+// It includes support for contextual prefixing, deduplication, and mild-CTX compression.
 package cli
 
 import (
@@ -13,6 +15,7 @@ import (
 )
 
 // PrintViolations prints the policy check violations to stdout using the standardized format.
+//
 // Template: [LEVEL] FILE:SYMBOL:LINE: MESSAGE [RULE_ID]
 func PrintViolations(chrome capabilities.CLIChromeStyler, violations []types.Violation) error {
 	seen := make(map[string]bool)
@@ -42,6 +45,7 @@ func PrintViolations(chrome capabilities.CLIChromeStyler, violations []types.Vio
 	return nil
 }
 
+// printSingleViolation renders a single violation with its severity prefix and location context.
 func printSingleViolation(chrome capabilities.CLIChromeStyler, v types.Violation) error {
 	prefix, context := buildViolationPrefixAndContext(chrome, v)
 	messageWithRule := fmt.Sprintf("%s [%s]", v.Message, v.RuleID)
@@ -61,6 +65,7 @@ func printSingleViolation(chrome capabilities.CLIChromeStyler, v types.Violation
 	return nil
 }
 
+// buildViolationPrefixAndContext constructs the stylized severity prefix and location string for a violation.
 func buildViolationPrefixAndContext(chrome capabilities.CLIChromeStyler, v types.Violation) (string, string) {
 	kind := capabilities.TextKindWarning
 	if v.Severity == "error" {
@@ -86,6 +91,7 @@ func buildViolationPrefixAndContext(chrome capabilities.CLIChromeStyler, v types
 	return prefix, context
 }
 
+// buildViolationContextString generates the file:line or file:func:line location string.
 func buildViolationContextString(v types.Violation) string {
 	path := filepath.ToSlash(v.File)
 	if path == "" {
@@ -138,6 +144,7 @@ func SummarizeWarnings(cfg config.PolicyConfig, violations []types.Violation) []
 	return append(others, summary)
 }
 
+// summarizePerFileMildCTX groups low-CTX warnings by file when they exceed the escalation threshold.
 func summarizePerFileMildCTX(cfg config.PolicyConfig, mildCTX []types.Violation) ([]types.Violation, []types.Violation) {
 	if cfg.Output.MildCTXPerFileSummaryMinCount <= 0 {
 		return nil, mildCTX
@@ -172,6 +179,7 @@ func summarizePerFileMildCTX(cfg config.PolicyConfig, mildCTX []types.Violation)
 	return summaries, remaining
 }
 
+// newGlobalMildCTXSummary creates a single summary violation for all low-CTX warnings across the repo.
 func newGlobalMildCTXSummary(cfg config.PolicyConfig, count int) types.Violation {
 	return types.Violation{
 		RuleID:   "function-quality",
@@ -180,6 +188,7 @@ func newGlobalMildCTXSummary(cfg config.PolicyConfig, count int) types.Violation
 	}
 }
 
+// newPerFileMildCTXSummary creates a summary violation for all low-CTX warnings in a specific file.
 func newPerFileMildCTXSummary(cfg config.PolicyConfig, file string, count int) types.Violation {
 	message := fmt.Sprintf("%s has %d low CTX violations (CTX %d-%d)", file, count, cfg.FunctionQuality.MildCTXMin, cfg.FunctionQuality.ElevatedCTXMin-1)
 	if cfg.Output.MildCTXPerFileEscalationCount > 0 && count >= cfg.Output.MildCTXPerFileEscalationCount {

@@ -70,7 +70,7 @@ func (a *Adapter) WalkDirectoryTree(root string, walkFn fs.WalkDirFunc) error {
 			if name == "router" && strings.HasSuffix(filepath.ToSlash(path), "internal/router") {
 				return fs.SkipDir
 			}
-			if skipDirs[name] {
+			if skipDirs[name] && filepath.Clean(path) != filepath.Clean(root) {
 				return fs.SkipDir
 			}
 		}

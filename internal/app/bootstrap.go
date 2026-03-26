@@ -1,3 +1,6 @@
+// internal/app/bootstrap.go
+// Boots the policycheck application against the router-backed extension bundle.
+// Keeps startup sequencing isolated from feature packages and command handlers.
 package app
 
 import (

@@ -1,4 +1,6 @@
 // internal/ports/cliwrapper_security_port.go
+// Declares the router port for wrapper package-security enforcement.
+// Keeps wrapper security consumers decoupled from advisory backend adapters.
 package ports
 
 import "context"

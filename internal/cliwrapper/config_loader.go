@@ -1,4 +1,6 @@
 // internal/cliwrapper/config_loader.go
+// Loads wrapper configuration from global and repository-scoped TOML sources.
+// Enforces merge ordering so repo config cannot weaken global security policy.
 package cliwrapper
 
 import (
@@ -73,6 +75,7 @@ func (l *WrapperConfigLoader) Load() (WrapperLoadResult, error) {
 }
 
 // loadGlobal reads the global config from l.GlobalConfigPath.
+//
 // Returns zero-value config and empty path when GlobalConfigPath is empty or
 // the file does not exist.
 func (l *WrapperConfigLoader) loadGlobal() (WrapperConfig, string, error) {
@@ -140,6 +143,7 @@ func readWrapperConfigFile(path string) (WrapperConfig, error) {
 }
 
 // mergeWrapperConfigs applies repo values over global values.
+//
 // Fields in global that are absent in repo are preserved.
 func mergeWrapperConfigs(global, repo WrapperConfig) WrapperConfig {
 	merged := global
@@ -177,6 +181,7 @@ func mergeUIConfig(global, repo WrapperUIConfig) WrapperUIConfig {
 }
 
 // walkUpForFile walks from dir toward the root looking for filename.
+//
 // Returns the absolute path of the first match, or empty string if not found.
 func walkUpForFile(dir, filename string) string {
 	current := filepath.Clean(dir)

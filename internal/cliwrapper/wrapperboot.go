@@ -1,3 +1,6 @@
+// internal/cliwrapper/wrapperboot.go
+// Resolves wrapper subsystem capabilities from the router boundary at startup.
+// Keeps command consumers decoupled from concrete adapter implementations.
 package cliwrapper
 
 import (
@@ -50,6 +53,7 @@ func WrapperBootEntry() (WrapperResolved, error) {
 	}, nil
 }
 
+// resolveWrapperDispatcher resolves the wrapper dispatcher contract from the router.
 func resolveWrapperDispatcher() (ports.CLIWrapperDispatcher, error) {
 	provider, err := router.RouterResolveProvider(router.PortCLIWrapperDispatcher)
 	if err != nil {
@@ -64,6 +68,7 @@ func resolveWrapperDispatcher() (ports.CLIWrapperDispatcher, error) {
 	return dispatcher, nil
 }
 
+// resolveWrapperSecurityGate resolves the wrapper security gate contract from the router.
 func resolveWrapperSecurityGate() (ports.CLIWrapperSecurityGate, error) {
 	provider, err := router.RouterResolveProvider(router.PortCLIWrapperSecurityGate)
 	if err != nil {
@@ -78,6 +83,7 @@ func resolveWrapperSecurityGate() (ports.CLIWrapperSecurityGate, error) {
 	return securityGate, nil
 }
 
+// resolveWrapperMacroRunner resolves the wrapper macro runner contract from the router.
 func resolveWrapperMacroRunner() (ports.CLIWrapperMacroRunner, error) {
 	provider, err := router.RouterResolveProvider(router.PortCLIWrapperMacroRunner)
 	if err != nil {
@@ -92,6 +98,7 @@ func resolveWrapperMacroRunner() (ports.CLIWrapperMacroRunner, error) {
 	return macroRunner, nil
 }
 
+// resolveWrapperFormatter resolves the wrapper formatter contract from the router.
 func resolveWrapperFormatter() (ports.CLIWrapperFormatter, error) {
 	provider, err := router.RouterResolveProvider(router.PortCLIWrapperFormatter)
 	if err != nil {

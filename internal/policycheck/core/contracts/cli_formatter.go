@@ -1,4 +1,6 @@
 // internal/policycheck/core/contracts/cli_formatter.go
+// Package contracts/cli_formatter enforces the use of audience-aware output stylers.
+// It flags direct use of fmt.Print* in CLI command implementation files to ensure consistent UI.
 package contracts
 
 import (

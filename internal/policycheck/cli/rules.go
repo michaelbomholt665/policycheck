@@ -1,4 +1,6 @@
 // internal/policycheck/cli/rules.go
+// Package cli/rules implements the main entry point and dispatch logic for the policycheck CLI.
+// It handles flag parsing, configuration loading, and orchestration of the analysis engine.
 package cli
 
 import (
@@ -92,6 +94,7 @@ func Run(args []string) int {
 	return exitCode
 }
 
+// loadPolicyConfig resolves and loads the policy-gate.toml configuration from the host.
 func loadPolicyConfig(configPath string) (*config.PolicyConfig, error) {
 	if err := host.SetInjectedPath(configPath); err != nil {
 		return nil, fmt.Errorf("set injected config path: %w", err)
@@ -115,6 +118,7 @@ func loadPolicyConfig(configPath string) (*config.PolicyConfig, error) {
 	return loadedConfig, nil
 }
 
+// processViolations handles the display of check results and determines the CLI exit code.
 func processViolations(renderers Renderers, violations []types.Violation) (int, error) {
 	if len(violations) == 0 {
 		success, err := styleChromeText(renderers.Chrome, capabilities.TextKindSuccess, "policycheck: ok")
@@ -177,6 +181,7 @@ func ArrangeViolationsForCLI(violations []types.Violation) []types.Violation {
 	return arranged
 }
 
+// violationSeverityRank provides a numeric weight for sorting violations by severity.
 func violationSeverityRank(severity string) int {
 	switch severity {
 	case "error":

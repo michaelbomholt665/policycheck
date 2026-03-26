@@ -31,7 +31,8 @@ allowed_prefixes = ["1.20"]
 	t.Run("Invalid TOML", func(t *testing.T) {
 		tomlData := []byte(`[invalid syntax`)
 		_, err := config.Load("test.toml", tomlData)
-		assert.ErrorContains(t, err, "test.toml: decode error")
+		assert.ErrorContains(t, err, "decode error")
+		assert.ErrorContains(t, err, "test.toml")
 	})
 
 	t.Run("Validation Failure", func(t *testing.T) {

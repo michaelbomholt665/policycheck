@@ -48,6 +48,103 @@ func ExtensionInstance() router.Extension {
 // Adapter implements the ports.ScannerProvider interface.
 type Adapter struct{}
 
+// ScanFile executes the external scanners against a single file.
+func (a *Adapter) ScanFile(ctx context.Context, root, path string) ([]ports.PolicyFact, error) {
+	if filepath.Ext(path) == ".go" {
+		return scanGoFile(path)
+	}
+
+	ext := filepath.Ext(path)
+	runtime, script := resolveScannerScript(ext)
+	if runtime == "" {
+		return nil, nil
+	}
+
+	tempDir, scriptPath, err := setupSingleScannerScript(ext, runtime, script)
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tempDir)
+
+	return executeSingleScanner(ctx, runtime, scriptPath, root, path)
+}
+
+func scanGoFile(path string) ([]ports.PolicyFact, error) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+	if err != nil {
+		return nil, fmt.Errorf("parse go file: %w", err)
+	}
+	return extractGoFunctionFacts(fset, f, path), nil
+}
+
+func resolveScannerScript(ext string) (string, []byte) {
+	if ext == ".py" {
+		return "python", policyScannerPy
+	}
+	if ext == ".ts" || ext == ".tsx" || ext == ".js" || ext == ".jsx" {
+		return "node", policyScannerJS
+	}
+	return "", nil
+}
+
+func setupSingleScannerScript(ext, runtime string, script []byte) (string, string, error) {
+	tempDir, err := os.MkdirTemp("", "scanner-single-*")
+	if err != nil {
+		return "", "", err
+	}
+
+	scriptPath := filepath.Join(tempDir, "scanner"+ext)
+	if runtime == "node" {
+		scriptPath = filepath.Join(tempDir, "scanner.cjs")
+	}
+
+	if err := writeScannerScript(scriptPath, script); err != nil {
+		os.RemoveAll(tempDir)
+		return "", "", err
+	}
+	return tempDir, scriptPath, nil
+}
+
+func executeSingleScanner(ctx context.Context, runtime, scriptPath, root, path string) ([]ports.PolicyFact, error) {
+	cmd := exec.CommandContext(ctx, runtime, scriptPath, "--root", root, "--file", path)
+
+	cwd, _ := os.Getwd()
+	realRoot := root
+	if _, err := os.Stat(filepath.Join(root, "node_modules")); os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(cwd, "node_modules")); err == nil {
+			realRoot = cwd
+		} else {
+			gitRoot, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+			if err == nil {
+				realRoot = strings.TrimSpace(string(gitRoot))
+			}
+		}
+	}
+	cmd.Env = scannerCommandEnv(realRoot, runtime)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	facts := []ports.PolicyFact{}
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		var fact ports.PolicyFact
+		if err := json.Unmarshal(scanner.Bytes(), &fact); err == nil && fact.Kind == "function_quality_fact" {
+			facts = append(facts, fact)
+		}
+	}
+
+	_ = cmd.Wait()
+	return facts, nil
+}
+
 // RunScanners executes the external scanners against the provided root directory.
 func (a *Adapter) RunScanners(ctx context.Context, root string) ([]ports.PolicyFact, error) {
 	// Resolve walk provider from router

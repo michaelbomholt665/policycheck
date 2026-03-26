@@ -1,4 +1,6 @@
 // internal/cliwrapper/chain.go
+// Implements chained command execution for wrapper gate-then-main workflows.
+// Preserves deterministic command ordering and cancellation behavior.
 package cliwrapper
 
 import (

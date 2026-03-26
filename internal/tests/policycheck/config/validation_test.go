@@ -115,4 +115,72 @@ func TestValidatePolicyConfig(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, []string{"internal/adapters/scanners"}, cfg.ScopeGuard.AllowedPathPrefixes)
 	})
+
+	t.Run("Invalid Router Imports Missing Roots", func(t *testing.T) {
+		cfg := config.PolicyConfig{}
+		config.ApplyPolicyConfigDefaults(&cfg)
+		cfg.FileSize.MinWarnLOC = 450
+		cfg.FileSize.MinMaxLOC = 650
+		cfg.FileSize.MinWarnToMaxGap = 150
+		cfg.RouterImports.Enabled = true
+		cfg.RouterImports.BusinessRoots = []string{}
+
+		err := config.ValidatePolicyConfig(&cfg)
+		assert.ErrorContains(t, err, "router_imports: business_roots must not be empty when enabled")
+	})
+
+	t.Run("Invalid Documentation Level", func(t *testing.T) {
+		cfg := config.PolicyConfig{}
+		config.ApplyPolicyConfigDefaults(&cfg)
+		cfg.FileSize.MinWarnLOC = 450
+		cfg.FileSize.MinMaxLOC = 650
+		cfg.FileSize.MinWarnToMaxGap = 150
+		cfg.Documentation.Enabled = true
+		cfg.Documentation.Level = "medium"
+
+		err := config.ValidatePolicyConfig(&cfg)
+		assert.ErrorContains(t, err, "documentation: invalid level \"medium\", must be \"loose\" or \"strict\"")
+	})
+
+	t.Run("Valid Expanded Documentation Styles", func(t *testing.T) {
+		cfg := config.PolicyConfig{}
+		config.ApplyPolicyConfigDefaults(&cfg)
+		cfg.FileSize.MinWarnLOC = 450
+		cfg.FileSize.MinMaxLOC = 650
+		cfg.FileSize.MinWarnToMaxGap = 150
+		cfg.Documentation.Enabled = true
+		cfg.Documentation.GoStyle = "presence_only"
+		cfg.Documentation.PythonStyle = "restructuredtext"
+		cfg.Documentation.TypeScriptStyle = "standard"
+
+		err := config.ValidatePolicyConfig(&cfg)
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"scripts"}, cfg.Documentation.PythonShebangRoots)
+	})
+
+	t.Run("Invalid Documentation Python Style", func(t *testing.T) {
+		cfg := config.PolicyConfig{}
+		config.ApplyPolicyConfigDefaults(&cfg)
+		cfg.FileSize.MinWarnLOC = 450
+		cfg.FileSize.MinMaxLOC = 650
+		cfg.FileSize.MinWarnToMaxGap = 150
+		cfg.Documentation.Enabled = true
+		cfg.Documentation.PythonStyle = "sphinx"
+
+		err := config.ValidatePolicyConfig(&cfg)
+		assert.ErrorContains(t, err, "documentation: invalid python_style \"sphinx\", allowed choices: google, numpy, restructuredtext, standard, presence_only")
+	})
+
+	t.Run("Invalid Documentation Shebang Root", func(t *testing.T) {
+		cfg := config.PolicyConfig{}
+		config.ApplyPolicyConfigDefaults(&cfg)
+		cfg.FileSize.MinWarnLOC = 450
+		cfg.FileSize.MinMaxLOC = 650
+		cfg.FileSize.MinWarnToMaxGap = 150
+		cfg.Documentation.Enabled = true
+		cfg.Documentation.PythonShebangRoots = []string{"../scripts"}
+
+		err := config.ValidatePolicyConfig(&cfg)
+		assert.ErrorContains(t, err, "documentation: python_shebang_roots: must stay within the repository")
+	})
 }

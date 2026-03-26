@@ -1,3 +1,6 @@
+// internal/cliwrapper/macro_runner.go
+// Executes configured wrapper macros with interpolation and failure-mode handling.
+// Keeps macro expansion logic deterministic and testable across command runners.
 package cliwrapper
 
 import (
@@ -111,6 +114,7 @@ func InterpolateTemplate(input string, vars map[string]string) (string, error) {
 	return output, nil
 }
 
+// findMacroByName returns the first configured macro with the requested name.
 func findMacroByName(macros []WrapperMacroConfig, name string) (WrapperMacroConfig, bool) {
 	for _, macro := range macros {
 		if macro.Name == name {
@@ -121,6 +125,7 @@ func findMacroByName(macros []WrapperMacroConfig, name string) (WrapperMacroConf
 	return WrapperMacroConfig{}, false
 }
 
+// prepareMacroStep expands template variables and tokenizes one macro command step.
 func prepareMacroStep(step string, vars map[string]string) (string, []string, error) {
 	interpolated, err := InterpolateTemplate(step, vars)
 	if err != nil {
@@ -139,6 +144,7 @@ func prepareMacroStep(step string, vars map[string]string) (string, []string, er
 	return interpolated, args, nil
 }
 
+// splitCommandLine tokenizes one interpolated macro command using shell-like quoting rules.
 func splitCommandLine(input string) ([]string, error) {
 	tokens := make([]string, 0)
 	var current strings.Builder

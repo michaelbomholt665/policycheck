@@ -50,7 +50,18 @@ scan_roots = ["internal", "cmd"]
 exclude_prefixes = ["cmd/policycheck"]
 min_name_tokens = 1
 cross_backend_min_name_tokens = 2
-exempt_function_names = ["Close", "Consumes", "Error", "Provides", "Read", "Required", "String", "Unwrap", "Write", "main"]
+exempt_function_names = [
+    "Close",
+    "Consumes",
+    "Error",
+    "Provides",
+    "Read",
+    "Required",
+    "String",
+    "Unwrap",
+    "Write",
+    "main",
+]
 
 [output]
 mild_ctx_compress_summary = true
@@ -74,7 +85,7 @@ ignore_path_prefixes = [
     "internal/adapters/scanners/policy_scanner.ts",
     "internal/adapters/scanners/policy_scanner.cjs",
     "internal/adapters/scanners/policy_scanner.js",
-    "internal/adapters/scanners/policy_scanner.py"
+    "internal/adapters/scanners/policy_scanner.py",
 ]
 allowed_literal_patterns = []
 
@@ -174,3 +185,43 @@ forbidden_calls = [
     "os.MkdirAll",
 ]
 allowed_path_prefixes = ["internal/adapters/scanners/"]
+
+[router_imports]
+enabled = true
+business_roots = [
+    "internal/policycheck",
+    "internal/cliwrapper",
+    "internal/ports",
+]
+adapter_roots = ["internal/adapters"]
+router_core_roots = ["internal/router"]
+router_boot_roots = ["internal/app", "internal/router/ext"]
+allowed_business_imports = [
+    "policycheck/internal/ports",
+    "policycheck/internal/router",
+    "policycheck/internal/router/capabilities",
+]
+forbidden_business_import_prefixes = [
+    "policycheck/internal/adapters/",
+    "policycheck/internal/router/ext/",
+]
+forbidden_adapter_to_adapter = true
+exceptions = []
+
+[documentation]
+enabled = true
+level = "strict"
+scan_roots = [
+    "internal/ports",
+    "internal/app",
+    "internal/cliwrapper",
+    "internal/policycheck",
+    "cmd",
+]
+go_style = "google"                 # google | standard | presence_only
+python_style = "numpy"              # google | numpy | restructuredtext | standard | presence_only
+typescript_style = "tsdoc"          # tsdoc | jsdoc | standard | presence_only
+enforce_headers = true              # path header plus 2-5 descriptive comment lines
+enforce_functions = true
+require_shebang_python = true       # only enforced for files under python_shebang_roots in strict mode
+python_shebang_roots = ["scripts"]
