@@ -213,52 +213,58 @@ func interpolateMacroTemplate(input string, vars map[string]string) (string, err
 	return output, nil
 }
 
-func splitMacroCommandLine(input string) ([]string, error) {
-	tokens := make([]string, 0)
-	var current strings.Builder
-	var quote rune
-	escaped := false
+type splitState struct {
+	current strings.Builder
+	quote   rune
+	escaped bool
+	tokens  []string
+}
 
-	flush := func() {
-		if current.Len() == 0 {
+func (s *splitState) flush() {
+	if s.current.Len() > 0 {
+		s.tokens = append(s.tokens, s.current.String())
+		s.current.Reset()
+	}
+}
+
+func (s *splitState) processRune(r rune) {
+	switch {
+	case s.escaped:
+		s.current.WriteRune(r)
+		s.escaped = false
+	case r == '\\':
+		s.escaped = true
+	case s.quote != 0:
+		if r == s.quote {
+			s.quote = 0
 			return
 		}
-
-		tokens = append(tokens, current.String())
-		current.Reset()
+		s.current.WriteRune(r)
+	case r == '\'' || r == '"':
+		s.quote = r
+	case r == ' ' || r == '\t' || r == '\n':
+		s.flush()
+	default:
+		s.current.WriteRune(r)
 	}
+}
+
+func splitMacroCommandLine(input string) ([]string, error) {
+	state := &splitState{tokens: make([]string, 0)}
 
 	for _, r := range input {
-		switch {
-		case escaped:
-			current.WriteRune(r)
-			escaped = false
-		case r == '\\':
-			escaped = true
-		case quote != 0:
-			if r == quote {
-				quote = 0
-				continue
-			}
-			current.WriteRune(r)
-		case r == '\'' || r == '"':
-			quote = r
-		case r == ' ' || r == '\t' || r == '\n':
-			flush()
-		default:
-			current.WriteRune(r)
-		}
+		state.processRune(r)
 	}
 
-	if escaped {
+	if state.escaped {
 		return nil, fmt.Errorf("trailing escape")
 	}
 
-	if quote != 0 {
+	if state.quote != 0 {
 		return nil, fmt.Errorf("unterminated quote")
 	}
 
-	flush()
+	state.flush()
 
-	return tokens, nil
+	return state.tokens, nil
 }

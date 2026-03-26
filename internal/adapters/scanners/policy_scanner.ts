@@ -33,6 +33,11 @@ type CommentRange = {
 	text: string;
 };
 
+export type ScanContext = {
+	sourceFile: ts.SourceFile;
+	relPath: string;
+};
+
 type WorkerRequest =
 	| { command: 'scan'; files: string[]; root: string }
 	| { command: 'exit' };
@@ -54,9 +59,9 @@ function isCountedFunctionLike(node: ts.Node): node is ts.FunctionDeclaration | 
 /**
  * Emits a quality fact for a symbol as a JSON line.
  */
-function emitFact(sourceFile: ts.SourceFile, relPath: string, name: string, symbolKind: string, node: ts.Node): void {
-	const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
-	const endLine = sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
+function emitFact(ctx: ScanContext, name: string, symbolKind: string, node: ts.Node): void {
+	const start = ctx.sourceFile.getLineAndCharacterOfPosition(node.getStart(ctx.sourceFile)).line + 1;
+	const endLine = ctx.sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
 
 	let paramCount = 0;
 	let params: string[] = [];
@@ -64,14 +69,14 @@ function emitFact(sourceFile: ts.SourceFile, relPath: string, name: string, symb
 
 	if (isCountedFunctionLike(node)) {
 		paramCount = node.parameters.length;
-		params = node.parameters.map((p) => p.name.getText(sourceFile));
-		docstring = extractLeadingDocumentation(sourceFile, node);
+		params = node.parameters.map((p) => p.name.getText(ctx.sourceFile));
+		docstring = extractLeadingDocumentation(ctx.sourceFile, node);
 	}
 
 	const fact: PolicyFact = {
 		kind: FACT_KIND,
 		language: 'typescript',
-		file_path: relPath,
+		file_path: ctx.relPath,
 		symbol_name: name,
 		line_number: start,
 		end_line: endLine,
@@ -97,6 +102,9 @@ function leadingCommentRanges(sourceFile: ts.SourceFile, node: ts.Node): Comment
 	let expectedEnd = node.getStart(sourceFile);
 	for (let i = ranges.length - 1; i >= 0; i -= 1) {
 		const range = ranges[i];
+		if (!range) {
+			continue;
+		}
 		const between = sourceFile.text.slice(range.end, expectedEnd);
 		if (!isDirectlyAttachedCommentGap(between)) {
 			break;
@@ -136,24 +144,23 @@ function extractLeadingDocumentation(sourceFile: ts.SourceFile, node: ts.Node): 
 	return comments.map((comment) => comment.text).join('\n');
 }
 
+const branchKinds = new Set([
+	ts.SyntaxKind.IfStatement,
+	ts.SyntaxKind.ForStatement,
+	ts.SyntaxKind.ForInStatement,
+	ts.SyntaxKind.ForOfStatement,
+	ts.SyntaxKind.WhileStatement,
+	ts.SyntaxKind.DoStatement,
+	ts.SyntaxKind.CatchClause,
+	ts.SyntaxKind.ConditionalExpression,
+	ts.SyntaxKind.CaseClause,
+]);
+
 /**
  * Returns the number of complexity points added by one branch node.
  */
 function branchComplexity(node: ts.Node): number {
-	if (
-		ts.isIfStatement(node) ||
-		ts.isForStatement(node) ||
-		ts.isForInStatement(node) ||
-		ts.isForOfStatement(node) ||
-		ts.isWhileStatement(node) ||
-		ts.isDoStatement(node) ||
-		ts.isCatchClause(node) ||
-		ts.isConditionalExpression(node)
-	) {
-		return 1;
-	}
-
-	if (ts.isCaseClause(node)) {
+	if (branchKinds.has(node.kind)) {
 		return 1;
 	}
 
@@ -222,27 +229,27 @@ function getVariableFunctionName(node: ts.VariableDeclaration): string | undefin
 /**
  * Emits facts for one scan node when it represents a supported symbol.
  */
-function emitNodeFact(sourceFile: ts.SourceFile, relPath: string, classStack: string[], node: ts.Node): void {
+function emitNodeFact(ctx: ScanContext, classStack: string[], node: ts.Node): void {
 	if (ts.isFunctionDeclaration(node) && node.name) {
-		emitFact(sourceFile, relPath, node.name.text, 'function', node);
+		emitFact(ctx, node.name.text, 'function', node);
 		return;
 	}
 
 	if (ts.isMethodDeclaration(node) && ts.isIdentifier(node.name)) {
-		emitFact(sourceFile, relPath, node.name.text, 'method', node);
+		emitFact(ctx, node.name.text, 'method', node);
 		return;
 	}
 
 	if (ts.isConstructorDeclaration(node)) {
-		const owner = classStack.length > 0 ? classStack[classStack.length - 1] : 'constructor';
-		emitFact(sourceFile, relPath, owner, 'method', node);
+		const owner = classStack.length > 0 ? (classStack.at(-1) ?? 'constructor') : 'constructor';
+		emitFact(ctx, owner, 'method', node);
 		return;
 	}
 
 	if (ts.isVariableDeclaration(node)) {
 		const variableName = getVariableFunctionName(node);
-		if (variableName && node.initializer) {
-			emitFact(sourceFile, relPath, variableName, 'function', node.initializer);
+		if (variableName !== undefined && node.initializer) {
+			emitFact(ctx, variableName, 'function', node.initializer);
 		}
 	}
 }
@@ -250,16 +257,16 @@ function emitNodeFact(sourceFile: ts.SourceFile, relPath: string, classStack: st
 /**
  * Visits a source tree and emits scanner facts.
  */
-function visitScanNode(sourceFile: ts.SourceFile, relPath: string, classStack: string[], node: ts.Node): void {
+function visitScanNode(ctx: ScanContext, classStack: string[], node: ts.Node): void {
 	if (ts.isClassDeclaration(node) && node.name) {
 		classStack.push(node.name.text);
-		ts.forEachChild(node, (child) => visitScanNode(sourceFile, relPath, classStack, child));
+		ts.forEachChild(node, (child) => visitScanNode(ctx, classStack, child));
 		classStack.pop();
 		return;
 	}
 
-	emitNodeFact(sourceFile, relPath, classStack, node);
-	ts.forEachChild(node, (child) => visitScanNode(sourceFile, relPath, classStack, child));
+	emitNodeFact(ctx, classStack, node);
+	ts.forEachChild(node, (child) => visitScanNode(ctx, classStack, child));
 }
 
 /**
@@ -267,7 +274,7 @@ function visitScanNode(sourceFile: ts.SourceFile, relPath: string, classStack: s
  */
 function scanSource(sourceFile: ts.SourceFile, relPath: string): void {
 	const classStack: string[] = [];
-	visitScanNode(sourceFile, relPath, classStack, sourceFile);
+	visitScanNode({ sourceFile, relPath }, classStack, sourceFile);
 }
 
 /**

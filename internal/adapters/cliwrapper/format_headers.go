@@ -22,13 +22,21 @@ type HeaderFormatterAdapter struct {
 	writeFile   func(string, []byte, fs.FileMode) error
 }
 
+type HeaderFormatterDeps struct {
+	ResolveWalk func() (ports.WalkProvider, error)
+	ResolveRoot func() (string, error)
+	ReadFile    func(string) ([]byte, error)
+	FileMode    func(string) (fs.FileMode, error)
+	WriteFile   func(string, []byte, fs.FileMode) error
+}
+
 // NewHeaderFormatterAdapter returns a formatter with production defaults.
 func NewHeaderFormatterAdapter() *HeaderFormatterAdapter {
-	return NewHeaderFormatterAdapterWithDeps(
-		resolveWalkProvider,
-		resolveHeaderRoot,
-		os.ReadFile,
-		func(path string) (fs.FileMode, error) {
+	return NewHeaderFormatterAdapterWithDeps(HeaderFormatterDeps{
+		ResolveWalk: resolveWalkProvider,
+		ResolveRoot: resolveHeaderRoot,
+		ReadFile:    os.ReadFile,
+		FileMode: func(path string) (fs.FileMode, error) {
 			info, err := os.Stat(path)
 			if err != nil {
 				return 0, err
@@ -36,26 +44,20 @@ func NewHeaderFormatterAdapter() *HeaderFormatterAdapter {
 
 			return info.Mode(), nil
 		},
-		func(path string, data []byte, mode fs.FileMode) error {
+		WriteFile: func(path string, data []byte, mode fs.FileMode) error {
 			return os.WriteFile(path, data, mode)
 		},
-	)
+	})
 }
 
 // NewHeaderFormatterAdapterWithDeps returns a formatter with injected seams for tests.
-func NewHeaderFormatterAdapterWithDeps(
-	resolveWalk func() (ports.WalkProvider, error),
-	resolveRoot func() (string, error),
-	readFile func(string) ([]byte, error),
-	fileMode func(string) (fs.FileMode, error),
-	writeFile func(string, []byte, fs.FileMode) error,
-) *HeaderFormatterAdapter {
+func NewHeaderFormatterAdapterWithDeps(deps HeaderFormatterDeps) *HeaderFormatterAdapter {
 	return &HeaderFormatterAdapter{
-		resolveWalk: resolveWalk,
-		resolveRoot: resolveRoot,
-		readFile:    readFile,
-		fileMode:    fileMode,
-		writeFile:   writeFile,
+		resolveWalk: deps.ResolveWalk,
+		resolveRoot: deps.ResolveRoot,
+		readFile:    deps.ReadFile,
+		fileMode:    deps.FileMode,
+		writeFile:   deps.WriteFile,
 	}
 }
 
@@ -139,6 +141,50 @@ var skippedHeaderDirs = map[string]struct{}{
 	"vendor":       {},
 }
 
+func formatSingleFile(ctx context.Context, deps headerFormattingDeps, path string, filter map[string]bool) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, fmt.Errorf("walk cancelled: %w", err)
+	}
+
+	relPath, err := filepath.Rel(deps.root, path)
+	if err != nil {
+		return false, fmt.Errorf("rel path %s: %w", path, err)
+	}
+	relPath = filepath.ToSlash(relPath)
+
+	language, ok := supportedHeaderLanguages[strings.ToLower(filepath.Ext(path))]
+	if !ok || !filter[language] || shouldSkipHeaderPath(relPath) {
+		return false, nil
+	}
+
+	content, err := deps.readFile(path)
+	if err != nil {
+		return false, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	updated, changed, err := applyHeaderForPath(string(content), language, relPath)
+	if err != nil {
+		return false, fmt.Errorf("apply header %s: %w", relPath, err)
+	}
+	if !changed {
+		return false, nil
+	}
+
+	if deps.dryRun {
+		return true, nil
+	}
+
+	mode, err := deps.fileMode(path)
+	if err != nil {
+		return false, fmt.Errorf("stat %s: %w", path, err)
+	}
+	if err := deps.writeFile(path, []byte(updated), mode); err != nil {
+		return false, fmt.Errorf("write %s: %w", path, err)
+	}
+
+	return true, nil
+}
+
 func runHeaderFormatting(ctx context.Context, deps headerFormattingDeps) error {
 	filter, err := normalizeHeaderFilter(deps.only)
 	if err != nil {
@@ -150,48 +196,16 @@ func runHeaderFormatting(ctx context.Context, deps headerFormattingDeps) error {
 		if walkErr != nil {
 			return fmt.Errorf("walk %s: %w", path, walkErr)
 		}
-		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("walk cancelled: %w", err)
-		}
 		if d.IsDir() {
 			return nil
 		}
 
-		relPath, err := filepath.Rel(deps.root, path)
-		if err != nil {
-			return fmt.Errorf("rel path %s: %w", path, err)
+		changed, fileErr := formatSingleFile(ctx, deps, path, filter)
+		if fileErr != nil {
+			return fileErr
 		}
-		relPath = filepath.ToSlash(relPath)
-
-		language, ok := supportedHeaderLanguages[strings.ToLower(filepath.Ext(path))]
-		if !ok || !filter[language] || shouldSkipHeaderPath(relPath) {
-			return nil
-		}
-
-		content, err := deps.readFile(path)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", path, err)
-		}
-
-		updated, changed, err := applyHeaderForPath(string(content), language, relPath)
-		if err != nil {
-			return fmt.Errorf("apply header %s: %w", relPath, err)
-		}
-		if !changed {
-			return nil
-		}
-
-		modified++
-		if deps.dryRun {
-			return nil
-		}
-
-		mode, err := deps.fileMode(path)
-		if err != nil {
-			return fmt.Errorf("stat %s: %w", path, err)
-		}
-		if err := deps.writeFile(path, []byte(updated), mode); err != nil {
-			return fmt.Errorf("write %s: %w", path, err)
+		if changed {
+			modified++
 		}
 
 		return nil

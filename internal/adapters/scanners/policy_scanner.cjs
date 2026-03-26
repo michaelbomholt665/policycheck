@@ -27,21 +27,21 @@ function isCountedFunctionLike(node) {
 /**
  * Emits a quality fact for a symbol as a JSON line.
  */
-function emitFact(sourceFile, relPath, name, symbolKind, node) {
-    const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
-    const endLine = sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
+function emitFact(ctx, name, symbolKind, node) {
+    const start = ctx.sourceFile.getLineAndCharacterOfPosition(node.getStart(ctx.sourceFile)).line + 1;
+    const endLine = ctx.sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
     let paramCount = 0;
     let params = [];
     let docstring = '';
     if (isCountedFunctionLike(node)) {
         paramCount = node.parameters.length;
-        params = node.parameters.map((p) => p.name.getText(sourceFile));
-        docstring = extractLeadingDocumentation(sourceFile, node);
+        params = node.parameters.map((p) => p.name.getText(ctx.sourceFile));
+        docstring = extractLeadingDocumentation(ctx.sourceFile, node);
     }
     const fact = {
         kind: FACT_KIND,
         language: 'typescript',
-        file_path: relPath,
+        file_path: ctx.relPath,
         symbol_name: name,
         line_number: start,
         end_line: endLine,
@@ -97,21 +97,22 @@ function extractLeadingDocumentation(sourceFile, node) {
     }
     return comments.map((comment) => comment.text).join('\n');
 }
+const branchKinds = new Set([
+    ts.SyntaxKind.IfStatement,
+    ts.SyntaxKind.ForStatement,
+    ts.SyntaxKind.ForInStatement,
+    ts.SyntaxKind.ForOfStatement,
+    ts.SyntaxKind.WhileStatement,
+    ts.SyntaxKind.DoStatement,
+    ts.SyntaxKind.CatchClause,
+    ts.SyntaxKind.ConditionalExpression,
+    ts.SyntaxKind.CaseClause,
+]);
 /**
  * Returns the number of complexity points added by one branch node.
  */
 function branchComplexity(node) {
-    if (ts.isIfStatement(node) ||
-        ts.isForStatement(node) ||
-        ts.isForInStatement(node) ||
-        ts.isForOfStatement(node) ||
-        ts.isWhileStatement(node) ||
-        ts.isDoStatement(node) ||
-        ts.isCatchClause(node) ||
-        ts.isConditionalExpression(node)) {
-        return 1;
-    }
-    if (ts.isCaseClause(node)) {
+    if (branchKinds.has(node.kind)) {
         return 1;
     }
     if (ts.isBinaryExpression(node) &&
@@ -168,46 +169,46 @@ function getVariableFunctionName(node) {
 /**
  * Emits facts for one scan node when it represents a supported symbol.
  */
-function emitNodeFact(sourceFile, relPath, classStack, node) {
+function emitNodeFact(ctx, classStack, node) {
     if (ts.isFunctionDeclaration(node) && node.name) {
-        emitFact(sourceFile, relPath, node.name.text, 'function', node);
+        emitFact(ctx, node.name.text, 'function', node);
         return;
     }
     if (ts.isMethodDeclaration(node) && ts.isIdentifier(node.name)) {
-        emitFact(sourceFile, relPath, node.name.text, 'method', node);
+        emitFact(ctx, node.name.text, 'method', node);
         return;
     }
     if (ts.isConstructorDeclaration(node)) {
         const owner = classStack.length > 0 ? classStack[classStack.length - 1] : 'constructor';
-        emitFact(sourceFile, relPath, owner, 'method', node);
+        emitFact(ctx, owner, 'method', node);
         return;
     }
     if (ts.isVariableDeclaration(node)) {
         const variableName = getVariableFunctionName(node);
         if (variableName && node.initializer) {
-            emitFact(sourceFile, relPath, variableName, 'function', node.initializer);
+            emitFact(ctx, variableName, 'function', node.initializer);
         }
     }
 }
 /**
  * Visits a source tree and emits scanner facts.
  */
-function visitScanNode(sourceFile, relPath, classStack, node) {
+function visitScanNode(ctx, classStack, node) {
     if (ts.isClassDeclaration(node) && node.name) {
         classStack.push(node.name.text);
-        ts.forEachChild(node, (child) => visitScanNode(sourceFile, relPath, classStack, child));
+        ts.forEachChild(node, (child) => visitScanNode(ctx, classStack, child));
         classStack.pop();
         return;
     }
-    emitNodeFact(sourceFile, relPath, classStack, node);
-    ts.forEachChild(node, (child) => visitScanNode(sourceFile, relPath, classStack, child));
+    emitNodeFact(ctx, classStack, node);
+    ts.forEachChild(node, (child) => visitScanNode(ctx, classStack, child));
 }
 /**
  * Recursively scans a source file for function and method declarations.
  */
 function scanSource(sourceFile, relPath) {
     const classStack = [];
-    visitScanNode(sourceFile, relPath, classStack, sourceFile);
+    visitScanNode({ sourceFile, relPath }, classStack, sourceFile);
 }
 /**
  * Processes a single file.

@@ -27,12 +27,16 @@ class PolicyVisitor(ast.NodeVisitor):
     """
     AST visitor that identifies functions and methods and emits quality facts.
     """
+
+    file_path: str
+    scope_types: list[str]
+
     def __init__(self, file_path: str) -> None:
         """
         Initializes the visitor with the file path being scanned.
         """
         self.file_path = file_path
-        self.scope_types: list[str] = []
+        self.scope_types = []
 
     def emit(self, node: ast.FunctionDef | ast.AsyncFunctionDef, symbol_kind: str) -> None:
         """
@@ -55,8 +59,9 @@ class PolicyVisitor(ast.NodeVisitor):
             "symbol_kind": symbol_kind,
             "docstring": docstring,
         }
-        sys.stdout.write(json.dumps(fact) + "\n")
+        _ = sys.stdout.write(json.dumps(fact) + "\n")
 
+    @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """
         Tracks class scope to distinguish between functions and methods.
@@ -97,12 +102,16 @@ class ComplexityVisitor(ast.NodeVisitor):
     """
     AST visitor that calculates cyclomatic complexity for a function.
     """
+
+    complexity: int
+
     def __init__(self) -> None:
         """
         Initializes the visitor with a base complexity of 1.
         """
         self.complexity = 1
 
+    @override
     def visit_If(self, node: ast.If) -> None:
         """
         Increments complexity for if statements.
@@ -110,6 +119,7 @@ class ComplexityVisitor(ast.NodeVisitor):
         self.complexity += 1
         self.generic_visit(node)
 
+    @override
     def visit_For(self, node: ast.For) -> None:
         """
         Increments complexity for for loops.
@@ -117,6 +127,7 @@ class ComplexityVisitor(ast.NodeVisitor):
         self.complexity += 1
         self.generic_visit(node)
 
+    @override
     def visit_AsyncFor(self, node: ast.AsyncFor) -> None:
         """
         Increments complexity for async for loops.
@@ -124,6 +135,7 @@ class ComplexityVisitor(ast.NodeVisitor):
         self.complexity += 1
         self.generic_visit(node)
 
+    @override
     def visit_While(self, node: ast.While) -> None:
         """
         Increments complexity for while loops.
@@ -131,6 +143,7 @@ class ComplexityVisitor(ast.NodeVisitor):
         self.complexity += 1
         self.generic_visit(node)
 
+    @override
     def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
         """
         Increments complexity for exception handlers.
@@ -138,6 +151,7 @@ class ComplexityVisitor(ast.NodeVisitor):
         self.complexity += 1
         self.generic_visit(node)
 
+    @override
     def visit_Match(self, node: ast.Match) -> None:
         """
         Increments complexity for match statements based on the number of cases.
@@ -145,6 +159,7 @@ class ComplexityVisitor(ast.NodeVisitor):
         self.complexity += len(node.cases)
         self.generic_visit(node)
 
+    @override
     def visit_BoolOp(self, node: ast.BoolOp) -> None:
         """
         Increments complexity for boolean operations (and/or).
@@ -174,14 +189,16 @@ def count_parameters(node: ast.FunctionDef | ast.AsyncFunctionDef) -> tuple[int,
         params.append(arg.arg)
     for arg in node.args.kwonlyargs:
         params.append(arg.arg)
-    if node.args.vararg:
-        params.append(node.args.vararg.arg)
-    if node.args.kwarg:
-        params.append(node.args.kwarg.arg)
+    if vararg := node.args.vararg:
+        params.append(vararg.arg)
+    if kwarg := node.args.kwarg:
+        params.append(kwarg.arg)
 
     # Exclude 'self' and 'cls' for methods
     if params and params[0] in ("self", "cls"):
-        return len(params) - 1, params[1:]
+        remaining = params.copy()
+        _ = remaining.pop(0)
+        return len(remaining), remaining
 
     return len(params), params
 
@@ -191,29 +208,54 @@ def process_file(args_file: str, args_root: str) -> None:
     Processes a single Python file.
     """
     try:
-        rel_path = os.path.relpath(args_file, args_root)
-    except ValueError:
-        rel_path = args_file
-    rel_path = rel_path.replace(os.sep, "/")
+        rel_path = os.path.relpath(str(args_file), str(args_root))
+    except (ValueError, TypeError):
+        rel_path = str(args_file)
+    rel_path = rel_path.replace(os.path.sep, "/")
 
     try:
         with open(args_file, "r", encoding="utf-8") as handle:
             source = handle.read()
     except OSError as err:
-        sys.stderr.write(f"Failed to read file {args_file}: {err}\n")
+        _ = sys.stderr.write(f"Failed to read file {args_file}: {err}\n")
         return
 
     try:
         tree = ast.parse(source, filename=args_file)
     except SyntaxError as err:
-        sys.stderr.write(f"SyntaxError parsing {args_file}: {err}\n")
+        _ = sys.stderr.write(f"SyntaxError parsing {args_file}: {err}\n")
         return
     except Exception as err:
-        sys.stderr.write(f"Error parsing {args_file}: {err}\n")
+        _ = sys.stderr.write(f"Error parsing {args_file}: {err}\n")
         return
 
     visitor = PolicyVisitor(rel_path)
     visitor.visit(tree)
+
+
+def handle_worker_request(trimmed: str) -> bool:
+    """
+    Handles a single worker request. Returns True to exit.
+    """
+    try:
+        request = cast(dict[str, object] | list[object] | int | float | str | bool | None, json.loads(trimmed))
+        if not isinstance(request, dict):
+            return False
+
+        command = str(request.get("command", ""))
+        if command == "scan":
+            files = cast(list[str], request.get("files", []))
+            root = str(request.get("root", ""))
+            if files and root:
+                for f in files:
+                    process_file(f, root)
+                _ = sys.stdout.write(json.dumps({"kind": "scan_complete"}) + "\n")
+                _ = sys.stdout.flush()  # NOSONAR
+        elif command == "exit":
+            return True
+    except Exception as err:
+        _ = sys.stderr.write(f"Worker error: {err}\n")
+    return False
 
 
 def run_worker() -> None:
@@ -239,21 +281,8 @@ def run_worker() -> None:
 
         last_active = time.time()
 
-        try:
-            request = json.loads(trimmed)
-            command = request.get("command")
-            if command == "scan":
-                files = request.get("files", [])
-                root = request.get("root")
-                if files and root:
-                    for f in files:
-                        process_file(f, root)
-                    sys.stdout.write(json.dumps({"kind": "scan_complete"}) + "\n")
-                    sys.stdout.flush()
-            elif command == "exit":
-                break
-        except Exception as err:
-            sys.stderr.write(f"Worker error: {err}\n")
+        if handle_worker_request(trimmed):
+            break
 
     sys.exit(0)
 
@@ -268,19 +297,20 @@ def main() -> None:
     _ = parser.add_argument("--worker", action="store_true", help="Run in persistent worker mode")
     args = parser.parse_args()
 
-    if args.worker:
+    is_worker = cast(bool, getattr(args, "worker", False))
+    if is_worker:
         run_worker()
         return
 
-    if not args.file or not args.root:
+    arg_file_raw = cast(list[str] | None, getattr(args, "file", None))
+    arg_root_raw = cast(str | None, getattr(args, "root", None))
+
+    if arg_file_raw and arg_root_raw:
+        for f in arg_file_raw:
+            process_file(f, str(arg_root_raw))
+    else:
         parser.print_help()
         sys.exit(1)
-
-    args_files = cast(list[str], args.file)
-    args_root = cast(str, args.root)
-
-    for args_file in args_files:
-        process_file(args_file, args_root)
 
 
 if __name__ == "__main__":
