@@ -1,4 +1,6 @@
 // internal/policycheck/core/security/secret_scan.go
+// Package security/secret_scan implements the scanning logic for identifying secrets.
+// It performs entropy analysis and pattern matching across the repository.
 package security
 
 import (
@@ -105,6 +107,7 @@ type secretScanInput struct {
 	content  string
 }
 
+// Visit implements the ast.Visitor interface to traverse the Go AST for strings.
 func (v *secretVisitor) Visit(n ast.Node) ast.Visitor {
 	if n == nil {
 		v.parents = v.parents[:len(v.parents)-1]
@@ -119,6 +122,7 @@ func (v *secretVisitor) Visit(n ast.Node) ast.Visitor {
 	return v
 }
 
+// checkStringLiteral evaluates a single string literal for secrets and entropy.
 func (v *secretVisitor) checkStringLiteral(lit *ast.BasicLit) {
 	val, err := strconv.Unquote(lit.Value)
 	if err != nil || val == "" {
@@ -158,6 +162,7 @@ func (v *secretVisitor) checkStringLiteral(lit *ast.BasicLit) {
 	v.checkEntropy(val, pos)
 }
 
+// checkContextualAllowlist returns true if the literal is in a safe context (e.g. map key).
 func (v *secretVisitor) checkContextualAllowlist(lit *ast.BasicLit) bool {
 	if len(v.parents) < 2 {
 		return false
@@ -188,6 +193,7 @@ func (v *secretVisitor) checkContextualAllowlist(lit *ast.BasicLit) bool {
 	return false
 }
 
+// isContextLoggingSink returns true if the current node is within a logging-system call.
 func (v *secretVisitor) isContextLoggingSink() bool {
 	for i := len(v.parents) - 1; i >= 0; i-- {
 		if call, ok := v.parents[i].(*ast.CallExpr); ok {
@@ -199,6 +205,7 @@ func (v *secretVisitor) isContextLoggingSink() bool {
 	return false
 }
 
+// checkEntropy calculates and reports high information density strings.
 func (v *secretVisitor) checkEntropy(val string, pos token.Position) {
 	if len(val) > 32 && !strings.Contains(val, " ") && !isAllHex(val) && !isUUID(val) {
 		ent := calculateShannonEntropy(val)
@@ -214,6 +221,7 @@ func (v *secretVisitor) checkEntropy(val string, pos token.Position) {
 	}
 }
 
+// isOSGetenvCall returns true if the call expression is for os.Getenv or os.LookupEnv.
 func isOSGetenvCall(call *ast.CallExpr) bool {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
 	if !ok {
@@ -226,6 +234,7 @@ func isOSGetenvCall(call *ast.CallExpr) bool {
 	return x.Name == "os" && (sel.Sel.Name == "Getenv" || sel.Sel.Name == "LookupEnv")
 }
 
+// checkSuppression looks for inline //nolint:secret comments for a given AST position.
 func checkSuppression(fset *token.FileSet, fileNode *ast.File, pos token.Pos) string {
 	line := fset.Position(pos).Line
 	for _, cg := range fileNode.Comments {
@@ -236,6 +245,7 @@ func checkSuppression(fset *token.FileSet, fileNode *ast.File, pos token.Pos) st
 	return ""
 }
 
+// checkCommentGroupForSuppression checks a comment group's lines for secret suppression markers.
 func checkCommentGroupForSuppression(fset *token.FileSet, cg *ast.CommentGroup, line int) (string, bool) {
 	for _, comment := range cg.List {
 		if fset.Position(comment.Pos()).Line != line {
@@ -252,6 +262,7 @@ func checkCommentGroupForSuppression(fset *token.FileSet, cg *ast.CommentGroup, 
 	return "", false
 }
 
+// isAllHex returns true if the string contains only hexadecimal digits.
 func isAllHex(s string) bool {
 	for _, r := range s {
 		if !isHexDigit(r) {
@@ -261,6 +272,7 @@ func isAllHex(s string) bool {
 	return true
 }
 
+// isUUID returns true if the string matches the standard UUID format.
 func isUUID(s string) bool {
 	if len(s) != 36 {
 		return false
@@ -277,10 +289,12 @@ func isUUID(s string) bool {
 	return true
 }
 
+// isHexDigit returns true if the rune is a valid hexadecimal character.
 func isHexDigit(r rune) bool {
 	return (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
 }
 
+// calculateShannonEntropy measures the information density of a string.
 func calculateShannonEntropy(s string) float64 {
 	if len(s) == 0 {
 		return 0
@@ -320,6 +334,7 @@ func ScanGoFileForSecrets(input secretScanInput, patterns []SecretPattern, cfg c
 	return FilterAllowlistedSecretFindings(visitor.viols, cfg)
 }
 
+// isLoggingSink returns true if the function call is identified as a logging operation.
 func isLoggingSink(fun ast.Expr, cfg config.PolicySecretLoggingConfig) bool {
 	sel, ok := fun.(*ast.SelectorExpr)
 	if !ok {
@@ -343,6 +358,7 @@ func isLoggingSink(fun ast.Expr, cfg config.PolicySecretLoggingConfig) bool {
 	}
 }
 
+// isKnownLoggerIdentifier returns true if the receiver name is a common or configured logger.
 func isKnownLoggerIdentifier(name string, cfg config.PolicySecretLoggingConfig) bool {
 	// Built-in defaults
 	defaults := map[string]struct{}{
@@ -366,6 +382,7 @@ func isKnownLoggerIdentifier(name string, cfg config.PolicySecretLoggingConfig) 
 	return false
 }
 
+// extractStringLiterals recursively pulls string literal values from an AST expression.
 func extractStringLiterals(expr ast.Expr) []string {
 	var literals []string
 	switch e := expr.(type) {
@@ -393,6 +410,7 @@ func extractStringLiterals(expr ast.Expr) []string {
 	return literals
 }
 
+// isStringFormattingCall returns true if the function is a fmt formatting call.
 func isStringFormattingCall(fun ast.Expr) bool {
 	sel, ok := fun.(*ast.SelectorExpr)
 	if !ok {
@@ -435,6 +453,7 @@ func ScanContentForSecrets(rel, content string, patterns []SecretPattern, cfg co
 	return FilterAllowlistedSecretFindings(allViols, cfg)
 }
 
+// evaluateSecretString runs all regex and keyword checks against a raw string.
 func evaluateSecretString(raw string, ctx secretContext) *types.Violation {
 	if IsBenignSecretExample(raw, ctx.cfg.BenignHints) || IsObviousPlaceholderSecret(raw, ctx.cfg.PlaceholderStrings) || IsAllowedLiteral(raw, ctx.cfg.CompiledAllowedLiteralPatterns) {
 		return nil
@@ -452,6 +471,7 @@ func evaluateSecretString(raw string, ctx secretContext) *types.Violation {
 	return nil
 }
 
+// checkSecretRegexpPatterns matches a string against the set of compiled secret regexes.
 func checkSecretRegexpPatterns(raw string, ctx secretContext) []types.Violation {
 	var viols []types.Violation
 	for _, p := range ctx.patterns {
@@ -472,6 +492,7 @@ func checkSecretRegexpPatterns(raw string, ctx secretContext) []types.Violation 
 	return viols
 }
 
+// checkSecretKeywords matches a string against a list of sensitive identity keywords.
 func checkSecretKeywords(raw string, ctx secretContext) []types.Violation {
 	var viols []types.Violation
 
@@ -502,6 +523,7 @@ func checkSecretKeywords(raw string, ctx secretContext) []types.Violation {
 	return viols
 }
 
+// shouldSkipKeywordScan applies heuristics to filter out obviously non-sensitive literals.
 func shouldSkipKeywordScan(raw string) bool {
 	if containsFormattingDirective(raw) {
 		return true
@@ -515,6 +537,7 @@ func shouldSkipKeywordScan(raw string) bool {
 	return len(raw) < 16 && !hasAssignment
 }
 
+// containsFormattingDirective returns true if the string has Go/C-style format markers.
 func containsFormattingDirective(raw string) bool {
 	formatTokens := []string{"%s", "%d", "%v", "%q", "%w"}
 	for _, token := range formatTokens {
@@ -525,10 +548,12 @@ func containsFormattingDirective(raw string) bool {
 	return false
 }
 
+// isTriviallyShortKeywordLiteral returns true if the literal is barely longer than the keyword itself.
 func isTriviallyShortKeywordLiteral(raw, keyword string) bool {
 	return len(raw) <= len(keyword)+2
 }
 
+// buildSecretKeywordMessage constructs a severity-specific violation message.
 func buildSecretKeywordMessage(keyword string, isLogLiteral bool) string {
 	if isLogLiteral {
 		return fmt.Sprintf("potential secret keyword '%s' found in log literal", keyword)

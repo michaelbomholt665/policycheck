@@ -39,6 +39,7 @@ func BuiltInPatterns() []SecretPattern {
 	return patterns
 }
 
+// builtInPasswordAndGenericPatterns returns patterns for passwords and generic sensitive assignments.
 func builtInPasswordAndGenericPatterns() []SecretPattern {
 	return []SecretPattern{
 		{ID: "generic_api_key_assignment", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`(?i)api[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9_\-]{20,}['"]?`)},
@@ -49,6 +50,7 @@ func builtInPasswordAndGenericPatterns() []SecretPattern {
 	}
 }
 
+// builtInAuthTokenPatterns returns patterns for standard authentication tokens (Bearer, GitHub, Slack, etc).
 func builtInAuthTokenPatterns() []SecretPattern {
 	return []SecretPattern{
 		{ID: "authorization_bearer_header", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`(?i)Authorization:\s*Bearer`)},
@@ -74,6 +76,7 @@ func builtInAuthTokenPatterns() []SecretPattern {
 	}
 }
 
+// builtInAPIKeyPatterns returns patterns for cloud provider API keys (AWS, GCP, Azure, etc).
 func builtInAPIKeyPatterns() []SecretPattern {
 	return []SecretPattern{
 		{ID: "aws_access_key_id", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`AKIA[0-9A-Z]{16}`)},
@@ -108,6 +111,7 @@ func builtInAPIKeyPatterns() []SecretPattern {
 	}
 }
 
+// builtInDSNPatterns returns patterns for database connection strings (MongoDB, Postgres, Redis, etc).
 func builtInDSNPatterns() []SecretPattern {
 	return []SecretPattern{
 		{ID: "mongodb_srv_dsn", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`mongodb\+srv://[^:]+:[^@]+@`)},
@@ -123,6 +127,7 @@ func builtInDSNPatterns() []SecretPattern {
 	}
 }
 
+// builtInHookPatterns returns patterns for sensitive webhook URLs (Stripe, Slack).
 func builtInHookPatterns() []SecretPattern {
 	return []SecretPattern{
 		{ID: "stripe_webhook_secret", Severity: SecretSeverityHigh, Pattern: regexp.MustCompile(`whsec_[a-zA-Z0-9]{32,}`)},
@@ -131,6 +136,7 @@ func builtInHookPatterns() []SecretPattern {
 	}
 }
 
+// builtInLanguageSpecificPatterns returns patterns for language-specific secret assignment conventions.
 func builtInLanguageSpecificPatterns() []SecretPattern {
 	return []SecretPattern{
 		{ID: "go_secret_assignment", Severity: SecretSeverityMedium, Pattern: regexp.MustCompile(`(?i)(?:password|secret|token|key|api[_-]?key)\s*=\s*"[a-zA-Z0-9_\-]{8,}"`)},
@@ -152,6 +158,7 @@ func builtInLanguageSpecificPatterns() []SecretPattern {
 	}
 }
 
+// builtInKeyMaterialPatterns returns patterns for PEM-encoded private keys (RSA, PKCS8, etc).
 func builtInKeyMaterialPatterns() []SecretPattern {
 	return []SecretPattern{
 		{ID: "rsa_private_key_pem", Severity: SecretSeverityCritical, Pattern: regexp.MustCompile(`-----BEGIN\s+RSA\s+PRIVATE\s+KEY-----`)},
@@ -162,6 +169,7 @@ func builtInKeyMaterialPatterns() []SecretPattern {
 	}
 }
 
+// builtInHeuristicPatterns returns patterns for general high-entropy hex strings.
 func builtInHeuristicPatterns() []SecretPattern {
 	return []SecretPattern{
 		{ID: "hex_secret_64", Severity: SecretSeverityLow, Pattern: regexp.MustCompile(`\b[a-f0-9]{64}\b`)},
@@ -227,6 +235,7 @@ func PickBestSecretFinding(findings []types.Violation) types.Violation {
 	return best
 }
 
+// filterSpecificSecretFindings removes generic findings when a high-confidence specific pattern matches.
 func filterSpecificSecretFindings(findings []types.Violation) []types.Violation {
 	hasSpecific := false
 	for _, f := range findings {
