@@ -138,7 +138,12 @@ func loadActiveDispatcherConfig() (WrapperConfig, error) {
 //
 // The security gate is resolved fresh from the router on each call.
 func (d *WrapperDispatcher) dispatchPackageGate(ctx context.Context, args []string) error {
-	req, err := ParseInstallRequest(args)
+	commandArgs, allowRisk, err := parseAllowRiskArgs(args)
+	if err != nil {
+		return fmt.Errorf("dispatcher: package gate: parse allow-risk: %w", err)
+	}
+
+	req, err := ParseInstallRequest(commandArgs)
 	if err != nil {
 		return fmt.Errorf("dispatcher: package gate: parse: %w", err)
 	}
@@ -148,19 +153,49 @@ func (d *WrapperDispatcher) dispatchPackageGate(ctx context.Context, args []stri
 		return fmt.Errorf("dispatcher: package gate: resolve security gate: %w", err)
 	}
 
-	if err := gate.CheckPackages(ctx, string(req.Ecosystem), req.Packages); err != nil {
+	if err := d.checkGateWithRiskOverride(ctx, allowRisk, gate.CheckPackages, string(req.Ecosystem), req.Packages); err != nil {
 		return fmt.Errorf("dispatcher: package gate: pre-install scan: %w", err)
 	}
 
-	if err := d.exec(ctx, args); err != nil {
+	if err := d.exec(ctx, commandArgs); err != nil {
 		return fmt.Errorf("dispatcher: package gate: exec: %w", err)
 	}
 
-	if err := gate.CheckLockfile(ctx, string(req.Ecosystem), req.LockfileHint); err != nil {
+	if err := d.checkLockfileWithRiskOverride(ctx, allowRisk, gate, string(req.Ecosystem), req.LockfileHint); err != nil {
 		return fmt.Errorf("dispatcher: package gate: post-install scan: %w", err)
 	}
 
 	return nil
+}
+
+func (d *WrapperDispatcher) checkGateWithRiskOverride(
+	ctx context.Context,
+	allowRisk string,
+	check func(context.Context, string, []string) error,
+	ecosystem string,
+	packages []string,
+) error {
+	err := check(ctx, ecosystem, packages)
+	if err == nil {
+		return nil
+	}
+
+	return resolveRiskOverride(allowRisk, err)
+}
+
+func (d *WrapperDispatcher) checkLockfileWithRiskOverride(
+	ctx context.Context,
+	allowRisk string,
+	gate ports.CLIWrapperSecurityGate,
+	ecosystem string,
+	lockfilePath string,
+) error {
+	err := gate.CheckLockfile(ctx, ecosystem, lockfilePath)
+	if err == nil {
+		return nil
+	}
+
+	return resolveRiskOverride(allowRisk, err)
 }
 
 // dispatchToolingGate handles ModeToolingGate args, splitting on -then when
@@ -193,12 +228,20 @@ func (d *WrapperDispatcher) dispatchMacroRun(ctx context.Context, args []string)
 		return fmt.Errorf("dispatcher: macro run: empty args")
 	}
 
+	macroName := args[0]
+	if macroName == "run" {
+		if len(args) < 2 {
+			return fmt.Errorf("dispatcher: macro run: missing macro name")
+		}
+		macroName = args[1]
+	}
+
 	runner, err := d.macroRunnerResolver()
 	if err != nil {
 		return fmt.Errorf("dispatcher: macro run: resolve macro runner: %w", err)
 	}
 
-	if err := runner.RunMacro(ctx, args[0]); err != nil {
+	if err := runner.RunMacro(ctx, macroName); err != nil {
 		return fmt.Errorf("dispatcher: macro run: %w", err)
 	}
 
@@ -281,14 +324,21 @@ func collectMacroNames(cfg WrapperConfig) []string {
 
 // parseFormatHeadersArgs parses CLI flags for the header-formatting command.
 func parseFormatHeadersArgs(args []string) (bool, []string, error) {
-	if len(args) < 3 {
+	if len(args) < 2 {
+		return false, nil, fmt.Errorf("expected 'fmt headers' or '<tool> fmt headers'")
+	}
+
+	startIndex := 3
+	if args[0] == "fmt" && args[1] == "headers" {
+		startIndex = 2
+	} else if len(args) < 3 {
 		return false, nil, fmt.Errorf("expected '<tool> fmt headers'")
 	}
 
 	dryRun := false
 	only := make([]string, 0)
 
-	for index := 3; index < len(args); {
+	for index := startIndex; index < len(args); {
 		switch args[index] {
 		case "--dry-run":
 			dryRun = true
@@ -309,4 +359,53 @@ func parseFormatHeadersArgs(args []string) (bool, []string, error) {
 	}
 
 	return dryRun, only, nil
+}
+
+func parseAllowRiskArgs(args []string) ([]string, string, error) {
+	filtered := make([]string, 0, len(args))
+	allowRisk := ""
+
+	for _, arg := range args {
+		if !strings.HasPrefix(arg, "--allow-risk=") {
+			filtered = append(filtered, arg)
+			continue
+		}
+
+		if allowRisk != "" {
+			return nil, "", fmt.Errorf("allow-risk may only be provided once")
+		}
+
+		allowRisk = strings.TrimPrefix(arg, "--allow-risk=")
+		if _, err := ParseSeverity(allowRisk); err != nil {
+			return nil, "", fmt.Errorf("invalid allow-risk %q: %w", allowRisk, err)
+		}
+	}
+
+	return filtered, allowRisk, nil
+}
+
+func resolveRiskOverride(allowRisk string, err error) error {
+	var blockErr *RiskBlockError
+	if !errors.As(err, &blockErr) {
+		return err
+	}
+
+	allowed, parseErr := IsRiskOverrideAllowed(allowRisk, blockErr.Severity)
+	if parseErr != nil {
+		return fmt.Errorf("resolve allow-risk override: %w", parseErr)
+	}
+	if allowed {
+		return nil
+	}
+
+	if strings.TrimSpace(allowRisk) == "" {
+		return fmt.Errorf("%w; use --allow-risk=%s to override", err, strings.ToLower(CanonicalSeverityLabel(blockErr.Severity)))
+	}
+
+	return fmt.Errorf(
+		"%w; --allow-risk=%s is insufficient for %s",
+		err,
+		strings.ToLower(allowRisk),
+		strings.ToLower(CanonicalSeverityLabel(blockErr.Severity)),
+	)
 }

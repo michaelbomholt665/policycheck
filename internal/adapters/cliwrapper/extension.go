@@ -5,9 +5,7 @@ import (
 	"policycheck/internal/router"
 )
 
-// defaultSecurityThreshold is the OSV block threshold used by the real dispatcher
-// when no repo-level config is loaded at extension boot time.
-const defaultSecurityThreshold = SeverityHigh
+var defaultSecurityConfig = DefaultWrapperConfig().Security
 
 // Extension implements router.Extension for the CLI wrapper subsystem.
 //
@@ -33,7 +31,7 @@ func (e *Extension) Provides() []router.PortName {
 
 // RouterProvideRegistration registers the real wrapper adapters for each subsystem port.
 func (e *Extension) RouterProvideRegistration(reg *router.Registry) error {
-	osvGate := NewOSVSecurityAdapter(defaultSecurityThreshold)
+	osvGate := NewOSVSecurityAdapter(defaultSecurityConfig)
 	dispatcher := NewWrapperDispatcher(WrapperConfig{}, defaultExecFunc)
 	dispatcher.loadConfig = loadActiveDispatcherConfig
 

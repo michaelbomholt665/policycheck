@@ -108,7 +108,7 @@ Acceptance checks:
 
 - `go test ./internal/tests/cliwrapper/... -count=1`
 - `go test ./internal/tests/policycheck/... -count=1`
-- `go run ./cmd/policycheck --policy-list`
+- `go run ./cmd/policycheck --list-rules`
 - `go run ./cmd/policycheck fmt headers --dry-run`
 - `go run ./internal/router/tools/wrlk guide current`
 

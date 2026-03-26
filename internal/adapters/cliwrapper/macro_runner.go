@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
-
-	"github.com/pelletier/go-toml/v2"
 )
 
 var macroTemplatePattern = regexp.MustCompile(`\{\{\.(?P<name>[A-Za-z0-9_-]+)\}\}`)
@@ -65,47 +62,21 @@ func loadActiveAdapterConfig() (WrapperConfig, error) {
 		return WrapperConfig{}, fmt.Errorf("get working directory: %w", err)
 	}
 
-	configPath, err := findActiveWrapperConfigPath(workingDir)
+	globalConfigPath, err := DefaultGlobalConfigPath()
 	if err != nil {
-		return WrapperConfig{}, fmt.Errorf("find wrapper config: %w", err)
+		return WrapperConfig{}, fmt.Errorf("resolve global wrapper config path: %w", err)
 	}
 
-	if configPath == "" {
-		return WrapperConfig{}, nil
+	loader := WrapperConfigLoader{
+		GlobalConfigPath: globalConfigPath,
+		StartDir:         workingDir,
 	}
-
-	data, err := os.ReadFile(configPath)
+	result, err := loader.Load()
 	if err != nil {
-		return WrapperConfig{}, fmt.Errorf("read %s: %w", configPath, err)
+		return WrapperConfig{}, fmt.Errorf("load wrapper config: %w", err)
 	}
 
-	var cfg WrapperConfig
-	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return WrapperConfig{}, fmt.Errorf("parse %s: %w", configPath, err)
-	}
-
-	return cfg, nil
-}
-
-func findActiveWrapperConfigPath(startDir string) (string, error) {
-	current := filepath.Clean(startDir)
-
-	for {
-		for _, name := range []string{"wrapper-gate.toml", "policy-gate.toml"} {
-			candidate := filepath.Join(current, name)
-			info, err := os.Stat(candidate)
-			if err == nil && !info.IsDir() {
-				return candidate, nil
-			}
-		}
-
-		parent := filepath.Dir(current)
-		if parent == current {
-			return "", nil
-		}
-
-		current = parent
-	}
+	return result.Merged, nil
 }
 
 type adapterMacroRunner struct {

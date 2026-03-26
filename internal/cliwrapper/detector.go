@@ -53,10 +53,10 @@ type WrapperDetector struct{}
 // Detect returns the WrapperMode that best matches args.
 //
 // The classification precedence is:
-//  1. MacroRun  — first arg matches a macro name from the registered list.
-//  2. FormatHeaders — args match the format-headers subcommand pattern.
+//  1. MacroRun  — args[0] is "run" or first arg matches a macro name.
+//  2. FormatHeaders — args[0] is "fmt" or args match the format-headers pattern.
 //  3. PackageGate — args look like a package-install invocation.
-//  4. ToolingGate — first arg is a known managed tool.
+//  4. ToolingGate — first arg is a known managed tool or args contain -then.
 //  5. Passthrough — none of the above.
 //
 // An empty or nil args slice is always ModePassthrough.
@@ -77,15 +77,19 @@ func (d WrapperDetector) Detect(args []string, macroNames []string) WrapperMode 
 		return ModePackageGate
 	}
 
-	if isToolingGate(args[0]) {
+	if isToolingGate(args) {
 		return ModeToolingGate
 	}
 
 	return ModePassthrough
 }
 
-// isMacroRun checks whether name matches any registered macro.
+// isMacroRun checks whether name matches any registered macro or the "run" subcommand.
 func isMacroRun(name string, macroNames []string) bool {
+	if name == "run" {
+		return true
+	}
+
 	for _, m := range macroNames {
 		if m == name {
 			return true
@@ -97,6 +101,14 @@ func isMacroRun(name string, macroNames []string) bool {
 
 // isFormatHeaders reports whether args look like a format-headers invocation.
 func isFormatHeaders(args []string) bool {
+	if len(args) < 2 {
+		return false
+	}
+
+	if args[0] == "fmt" && args[1] == "headers" {
+		return true
+	}
+
 	if len(args) < 3 {
 		return false
 	}
@@ -124,9 +136,24 @@ func isPackageGate(args []string) bool {
 	return sliceContains(subcmds, args[1])
 }
 
-// isToolingGate reports whether name is a managed external tool.
-func isToolingGate(name string) bool {
-	return sliceContains(toolingGateManagers, name)
+// isToolingGate reports whether args represent a managed external tool invocation
+// or a chained command.
+func isToolingGate(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+
+	if sliceContains(toolingGateManagers, args[0]) {
+		return true
+	}
+
+	for _, arg := range args {
+		if arg == "-then" {
+			return true
+		}
+	}
+
+	return false
 }
 
 // sliceContains is a small linear-search helper for short string slices.

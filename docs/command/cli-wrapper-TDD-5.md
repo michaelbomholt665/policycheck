@@ -13,12 +13,12 @@ Connect the existing wrapper subsystem to the real `policycheck` binary so the c
 
 ## Task Checklist
 
-- [ ] Add `internal/app/run.go` as the shared binary dispatch seam.
-- [ ] Route wrapper commands through `internal/cliwrapper` from the real binary.
-- [ ] Preserve policycheck analysis commands through the shared app layer.
-- [ ] Decide and implement the explicit analysis command shape (`check` or equivalent).
-- [ ] Add focused app-layer tests for wrapper-vs-analysis selection.
-- [ ] Verify wrapper features are reachable from `go run ./cmd/policycheck`.
+- [x] Add `internal/app/run.go` as the shared binary dispatch seam.
+- [x] Route wrapper commands through `internal/cliwrapper` from the real binary.
+- [x] Preserve policycheck analysis commands through the shared app layer.
+- [x] Decide and implement the explicit analysis command shape (`check` or equivalent).
+- [x] Add focused app-layer tests for wrapper-vs-analysis selection.
+- [x] Verify wrapper features are reachable from `go run ./cmd/policycheck`.
 
 ## Why This Phase Exists
 
@@ -67,18 +67,18 @@ sequenceDiagram
 Summary: teach the binary to distinguish wrapper commands from policycheck analysis commands without forcing everything through the analysis flag parser first.
 
 RED:
-- [ ] Write a failing test where `policycheck uv add fastapi` is sent to the wrapper dispatcher.
-- [ ] Write a failing test where `policycheck --policy-list` still stays on the analysis path.
-- [ ] Write a failing test for explicit `policycheck check`.
+- [x] Write a failing test where `policycheck uv add fastapi` is sent to the wrapper dispatcher.
+- [x] Write a failing test where `policycheck --policy-list` still stays on the analysis path.
+- [x] Write a failing test for explicit `policycheck check`.
 
 GREEN:
-- [ ] Add an app-level `Run(args []string) int` seam under `internal/app/`.
-- [ ] Route wrapper commands through `WrapperBootEntry` and the dispatcher port.
-- [ ] Route policycheck analysis commands to the existing analysis CLI.
+- [x] Add an app-level `Run(args []string) int` seam under `internal/app/`.
+- [x] Route wrapper commands through `WrapperBootEntry` and the dispatcher port.
+- [x] Route policycheck analysis commands to the existing analysis CLI.
 
 REFACTOR:
-- [ ] Keep top-level classification small and explicit.
-- [ ] Avoid duplicating wrapper detector logic inside the analysis package.
+- [x] Keep top-level classification small and explicit.
+- [x] Avoid duplicating wrapper detector logic inside the analysis package.
 
 Acceptance checks:
 - Wrapper commands become reachable from the real binary.
@@ -89,15 +89,15 @@ Acceptance checks:
 Summary: align the analysis surface with the shared-binary design so wrapper commands and policy checks are not competing for the same raw arg space.
 
 RED:
-- [ ] Write a failing test that `policycheck check --policy-list` is accepted if that is the chosen explicit analysis surface.
-- [ ] Write a failing test that bare wrapper commands do not require a `check` prefix.
+- [x] Write a failing test that `policycheck check --policy-list` is accepted if that is the chosen explicit analysis surface.
+- [x] Write a failing test that bare wrapper commands do not require a `check` prefix.
 
 GREEN:
-- [ ] Introduce or normalize an explicit analysis subcommand if needed.
-- [ ] Preserve backward compatibility only when it does not blur the wrapper boundary.
+- [x] Introduce or normalize an explicit analysis subcommand if needed.
+- [x] Preserve backward compatibility only when it does not blur the wrapper boundary.
 
 REFACTOR:
-- [ ] Simplify analysis CLI parsing after the shared app router owns top-level dispatch.
+- [x] Simplify analysis CLI parsing after the shared app router owns top-level dispatch.
 
 Acceptance checks:
 - The binary command model matches the design doc more closely.
@@ -108,16 +108,16 @@ Acceptance checks:
 Summary: prove the implemented wrapper features are actually reachable through `cmd/policycheck`.
 
 RED:
-- [ ] Add a focused end-to-end test for `policycheck fmt headers --dry-run`.
-- [ ] Add a focused end-to-end test for `policycheck run <macro>`.
-- [ ] Add a focused end-to-end test for `policycheck <tool> ... -then ...`.
-- [ ] Keep them narrow and seam-driven, not shell-heavy.
+- [x] Add a focused end-to-end test for `policycheck fmt headers --dry-run`.
+- [x] Add a focused end-to-end test for `policycheck run <macro>`.
+- [x] Add a focused end-to-end test for `policycheck <tool> ... -then ...`.
+- [x] Keep them narrow and seam-driven, not shell-heavy.
 
 GREEN:
-- [ ] Wire the remaining app-layer seams needed for command execution and exit codes.
+- [x] Wire the remaining app-layer seams needed for command execution and exit codes.
 
 REFACTOR:
-- [ ] Normalize error rendering between wrapper and analysis paths.
+- [x] Normalize error rendering between wrapper and analysis paths.
 
 Acceptance checks:
 - The binary now exposes the wrapper surface promised by the design doc.

@@ -3,7 +3,6 @@ package dispatch_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -86,7 +85,10 @@ func TestDispatcher_PackageGate_Allowed(t *testing.T) {
 func TestDispatcher_PackageGate_Blocked(t *testing.T) {
 	t.Parallel()
 
-	blockErr := errors.New("critical vulnerability in lodash")
+	blockErr := &cliwrapperadapter.RiskBlockError{
+		Severity: cliwrapperadapter.SeverityCritical,
+		Reason:   "critical vulnerability in lodash",
+	}
 	gate := &stubSecurityGate{packageErr: blockErr}
 	rec := &execRecorder{}
 
@@ -102,12 +104,61 @@ func TestDispatcher_PackageGate_Blocked(t *testing.T) {
 	assert.Empty(t, rec.calls, "exec must not be called when gate blocks")
 }
 
+func TestDispatcher_PackageGate_AllowRiskOverridesMatchingSeverity(t *testing.T) {
+	t.Parallel()
+
+	gate := &stubSecurityGate{
+		packageErr: &cliwrapperadapter.RiskBlockError{
+			Severity: cliwrapperadapter.SeverityHigh,
+			Reason:   "high vulnerability in lodash",
+		},
+	}
+	rec := &execRecorder{}
+
+	d := cliwrapperadapter.NewWrapperDispatcherWithResolver(
+		cliwrapperadapter.WrapperConfig{},
+		rec.exec,
+		func() (ports.CLIWrapperSecurityGate, error) { return gate, nil },
+	)
+	err := d.Dispatch(context.Background(), []string{"npm", "install", "lodash", "--allow-risk=high"})
+
+	require.NoError(t, err)
+	require.Len(t, rec.calls, 1)
+	assert.Equal(t, []string{"npm", "install", "lodash"}, rec.calls[0])
+}
+
+func TestDispatcher_PackageGate_AllowRiskTooLowStillBlocks(t *testing.T) {
+	t.Parallel()
+
+	gate := &stubSecurityGate{
+		packageErr: &cliwrapperadapter.RiskBlockError{
+			Severity: cliwrapperadapter.SeverityCritical,
+			Reason:   "critical vulnerability in lodash",
+		},
+	}
+	rec := &execRecorder{}
+
+	d := cliwrapperadapter.NewWrapperDispatcherWithResolver(
+		cliwrapperadapter.WrapperConfig{},
+		rec.exec,
+		func() (ports.CLIWrapperSecurityGate, error) { return gate, nil },
+	)
+	err := d.Dispatch(context.Background(), []string{"npm", "install", "lodash", "--allow-risk=high"})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--allow-risk=high is insufficient")
+	assert.Empty(t, rec.calls)
+}
+
 // TestDispatcher_PackageGate_PostInstallBlocked verifies a post-install lockfile
 // scan still blocks the wrapper result after the package manager command runs.
 func TestDispatcher_PackageGate_PostInstallBlocked(t *testing.T) {
 	t.Parallel()
 
-	blockErr := errors.New("transitive vulnerability in package-lock.json")
+	blockErr := &cliwrapperadapter.RiskBlockError{
+		Severity: cliwrapperadapter.SeverityHigh,
+		Reason:   "transitive vulnerability in package-lock.json",
+	}
 	gate := &stubSecurityGate{lockfileErr: blockErr}
 	rec := &execRecorder{}
 

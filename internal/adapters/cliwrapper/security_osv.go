@@ -51,16 +51,15 @@ type osvBatchResponse struct {
 // OSVSecurityAdapter satisfies its port by injecting dependency on the OSV HTTP
 // endpoint; it does not import or call any policycheck analysis-engine code.
 type OSVSecurityAdapter struct {
-	threshold  Severity
-	httpClient *http.Client
+	defaultConfig WrapperSecurityConfig
+	httpClient    *http.Client
 }
 
 // NewOSVSecurityAdapter returns a configured OSVSecurityAdapter.
-// threshold is the minimum severity that triggers a block decision.
-func NewOSVSecurityAdapter(threshold Severity) *OSVSecurityAdapter {
+func NewOSVSecurityAdapter(defaultConfig WrapperSecurityConfig) *OSVSecurityAdapter {
 	return &OSVSecurityAdapter{
-		threshold:  threshold,
-		httpClient: &http.Client{},
+		defaultConfig: defaultConfig,
+		httpClient:    &http.Client{},
 	}
 }
 
@@ -79,10 +78,16 @@ func (a *OSVSecurityAdapter) CheckPackages(ctx context.Context, _ string, purls 
 		return fmt.Errorf("osv security adapter: scan failed: %w", err)
 	}
 
-	result := EvaluateSeverity(a.threshold, advisories)
+	result, err := a.evaluateAdvisories(advisories)
+	if err != nil {
+		return fmt.Errorf("osv security adapter: evaluate advisories: %w", err)
+	}
 
 	if result.Decision != DecisionAllow {
-		return fmt.Errorf("osv security adapter: %s", result.BlockReason)
+		return &RiskBlockError{
+			Severity: result.BlockingSeverity,
+			Reason:   fmt.Sprintf("osv security adapter: %s", result.BlockReason),
+		}
 	}
 
 	return nil
@@ -110,9 +115,15 @@ func (a *OSVSecurityAdapter) CheckLockfile(ctx context.Context, _ string, lockfi
 		return fmt.Errorf("lockfile scan %q: %w", lockfilePath, err)
 	}
 
-	result := EvaluateSeverity(a.threshold, advisories)
+	result, err := a.evaluateAdvisories(advisories)
+	if err != nil {
+		return fmt.Errorf("osv security adapter: evaluate advisories: %w", err)
+	}
 	if result.Decision != DecisionAllow {
-		return fmt.Errorf("osv security adapter: %s", result.BlockReason)
+		return &RiskBlockError{
+			Severity: result.BlockingSeverity,
+			Reason:   fmt.Sprintf("osv security adapter: %s", result.BlockReason),
+		}
 	}
 
 	return nil
@@ -126,6 +137,26 @@ func buildOSVQueries(purls []string) []osvPURL {
 	}
 
 	return queries
+}
+
+func (a *OSVSecurityAdapter) evaluateAdvisories(advisories []Advisory) (SecurityResult, error) {
+	cfg, err := loadActiveAdapterConfig()
+	if err != nil {
+		if isZeroSecurityConfig(a.defaultConfig) {
+			return SecurityResult{}, err
+		}
+
+		return EvaluateSecurityPolicy(a.defaultConfig, advisories), nil
+	}
+
+	return EvaluateSecurityPolicy(cfg.Security, advisories), nil
+}
+
+func isZeroSecurityConfig(cfg WrapperSecurityConfig) bool {
+	return len(cfg.BlockOn) == 0 &&
+		len(cfg.WarnOn) == 0 &&
+		len(cfg.AllowOn) == 0 &&
+		cfg.OSVMode == ""
 }
 
 func (a *OSVSecurityAdapter) scanPackages(ctx context.Context, purls []string) ([]Advisory, error) {

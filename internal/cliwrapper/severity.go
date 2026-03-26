@@ -35,6 +35,8 @@ type SecurityResult struct {
 	Advisories []Advisory
 	// BlockReason is a human-readable explanation when Decision != DecisionAllow.
 	BlockReason string
+	// BlockingSeverity is the advisory severity that triggered the block.
+	BlockingSeverity Severity
 }
 
 // EvaluateSeverity applies threshold to advisories and returns a SecurityResult.
@@ -51,9 +53,46 @@ func EvaluateSeverity(threshold Severity, advisories []Advisory) SecurityResult 
 
 		if SeverityAtLeast(advSev, threshold) {
 			return SecurityResult{
-				Decision:    DecisionBlock,
-				Advisories:  advisories,
-				BlockReason: fmt.Sprintf("advisory %s (%s) meets or exceeds block threshold", adv.ID, adv.Severity),
+				Decision:         DecisionBlock,
+				Advisories:       advisories,
+				BlockReason:      fmt.Sprintf("advisory %s (%s) meets or exceeds block threshold", adv.ID, adv.Severity),
+				BlockingSeverity: advSev,
+			}
+		}
+	}
+
+	return SecurityResult{
+		Decision:   DecisionAllow,
+		Advisories: advisories,
+	}
+}
+
+// EvaluateSecurityPolicy applies an explicit block_on config to advisories.
+func EvaluateSecurityPolicy(cfg WrapperSecurityConfig, advisories []Advisory) SecurityResult {
+	blockLevels := cfg.BlockOn
+	if len(blockLevels) == 0 {
+		blockLevels = DefaultWrapperConfig().Security.BlockOn
+	}
+
+	for _, advisory := range advisories {
+		advisorySeverity, err := ParseSeverity(advisory.Severity)
+		if err != nil {
+			advisorySeverity = SeverityCritical
+		}
+
+		for _, blockedLabel := range blockLevels {
+			blockedSeverity, err := ParseSeverity(blockedLabel)
+			if err != nil {
+				blockedSeverity = SeverityCritical
+			}
+
+			if advisorySeverity == blockedSeverity {
+				return SecurityResult{
+					Decision:         DecisionBlock,
+					Advisories:       advisories,
+					BlockReason:      fmt.Sprintf("advisory %s (%s) is blocked by security.block_on", advisory.ID, advisory.Severity),
+					BlockingSeverity: advisorySeverity,
+				}
 			}
 		}
 	}

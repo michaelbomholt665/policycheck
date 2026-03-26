@@ -29,7 +29,7 @@ __pycache__/
 .claude 
 
 # folders
-artifacts/
+# artifacts/
 docs/router/
 docs/standard/
 script/
