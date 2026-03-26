@@ -66,7 +66,12 @@ func (a *Adapter) ScanFile(ctx context.Context, root, path string) ([]ports.Poli
 	}
 	defer os.RemoveAll(tempDir)
 
-	return executeSingleScanner(ctx, runtime, scriptPath, root, path)
+	return executeSingleScanner(ctx, scannerContext{
+		runtime:    runtime,
+		scriptPath: scriptPath,
+		root:       root,
+		path:       path,
+	})
 }
 
 func scanGoFile(path string) ([]ports.PolicyFact, error) {
@@ -106,12 +111,20 @@ func setupSingleScannerScript(ext, runtime string, script []byte) (string, strin
 	return tempDir, scriptPath, nil
 }
 
-func executeSingleScanner(ctx context.Context, runtime, scriptPath, root, path string) ([]ports.PolicyFact, error) {
-	cmd := exec.CommandContext(ctx, runtime, scriptPath, "--root", root, "--file", path)
+type scannerContext struct {
+	runtime    string
+	scriptPath string
+	root       string
+	path       string
+	walk       ports.WalkProvider
+}
+
+func executeSingleScanner(ctx context.Context, sctx scannerContext) ([]ports.PolicyFact, error) {
+	cmd := exec.CommandContext(ctx, sctx.runtime, sctx.scriptPath, "--root", sctx.root, "--file", sctx.path)
 
 	cwd, _ := os.Getwd()
-	realRoot := root
-	if _, err := os.Stat(filepath.Join(root, "node_modules")); os.IsNotExist(err) {
+	realRoot := sctx.root
+	if _, err := os.Stat(filepath.Join(sctx.root, "node_modules")); os.IsNotExist(err) {
 		if _, err := os.Stat(filepath.Join(cwd, "node_modules")); err == nil {
 			realRoot = cwd
 		} else {
@@ -121,7 +134,7 @@ func executeSingleScanner(ctx context.Context, runtime, scriptPath, root, path s
 			}
 		}
 	}
-	cmd.Env = scannerCommandEnv(realRoot, runtime)
+	cmd.Env = scannerCommandEnv(realRoot, sctx.runtime)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -183,7 +196,12 @@ func (a *Adapter) RunScanners(ctx context.Context, root string) ([]ports.PolicyF
 	facts = append(facts, goFacts...)
 
 	// 2. Run Python scanner
-	pyFacts, err := runScanner(ctx, root, "python", pyPath, walkProvider)
+	pyFacts, err := runScanner(ctx, scannerContext{
+		root:       root,
+		runtime:    "python",
+		scriptPath: pyPath,
+		walk:       walkProvider,
+	})
 	if err != nil {
 		log.Printf("non-fatal python scanner failure: %v", err)
 	} else {
@@ -191,7 +209,12 @@ func (a *Adapter) RunScanners(ctx context.Context, root string) ([]ports.PolicyF
 	}
 
 	// 3. Run JS scanner
-	jsFacts, err := runScanner(ctx, root, "node", jsPath, walkProvider)
+	jsFacts, err := runScanner(ctx, scannerContext{
+		root:       root,
+		runtime:    "node",
+		scriptPath: jsPath,
+		walk:       walkProvider,
+	})
 	if err != nil {
 		log.Printf("non-fatal node scanner failure: %v", err)
 	} else {
@@ -267,16 +290,16 @@ func extractGoFunctionFacts(fset *token.FileSet, f *ast.File, rel string) []port
 	return facts
 }
 
-func runScanner(ctx context.Context, root, runtime, scriptPath string, walk ports.WalkProvider) ([]ports.PolicyFact, error) {
-	files, err := gatherScannerFiles(root, runtime, walk)
+func runScanner(ctx context.Context, sctx scannerContext) ([]ports.PolicyFact, error) {
+	files, err := gatherScannerFiles(sctx.root, sctx.runtime, sctx.walk)
 	if err != nil || len(files) == 0 {
 		return nil, nil
 	}
 
-	cmd := exec.CommandContext(ctx, runtime, scriptPath, "--root", root, "--file")
+	cmd := exec.CommandContext(ctx, sctx.runtime, sctx.scriptPath, "--root", sctx.root, "--file")
 	cmd.Args = append(cmd.Args, files...)
-	cmd.Dir = root
-	cmd.Env = scannerCommandEnv(root, runtime)
+	cmd.Dir = sctx.root
+	cmd.Env = scannerCommandEnv(sctx.root, sctx.runtime)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -294,7 +317,7 @@ func runScanner(ctx context.Context, root, runtime, scriptPath string, walk port
 	for scanner.Scan() {
 		var fact ports.PolicyFact
 		if err := json.Unmarshal(scanner.Bytes(), &fact); err != nil {
-			return nil, fmt.Errorf("decode %s scanner output: %w", runtime, err)
+			return nil, fmt.Errorf("decode %s scanner output: %w", sctx.runtime, err)
 		}
 		if fact.Kind == "function_quality_fact" {
 			facts = append(facts, fact)
@@ -302,16 +325,16 @@ func runScanner(ctx context.Context, root, runtime, scriptPath string, walk port
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scan %s output: %w", runtime, err)
+		return nil, fmt.Errorf("scan %s output: %w", sctx.runtime, err)
 	}
 
 	if err := cmd.Wait(); err != nil {
 		stderrText := strings.TrimSpace(stderr.String())
 		if stderrText != "" {
-			return nil, fmt.Errorf("wait for %s scanner: %w: %s", runtime, err, stderrText)
+			return nil, fmt.Errorf("wait for %s scanner: %w: %s", sctx.runtime, err, stderrText)
 		}
 
-		return nil, fmt.Errorf("wait for %s scanner: %w", runtime, err)
+		return nil, fmt.Errorf("wait for %s scanner: %w", sctx.runtime, err)
 	}
 
 	return facts, nil

@@ -151,6 +151,7 @@ type splitState struct {
 	tokens  []string
 }
 
+// flush appends the current token buffer to the tokens slice if it is non-empty.
 func (s *splitState) flush() {
 	if s.current.Len() > 0 {
 		s.tokens = append(s.tokens, s.current.String())
@@ -158,6 +159,7 @@ func (s *splitState) flush() {
 	}
 }
 
+// processRune handles a single character in the shell-like command splitter state machine.
 func (s *splitState) processRune(r rune) {
 	switch {
 	case s.escaped:

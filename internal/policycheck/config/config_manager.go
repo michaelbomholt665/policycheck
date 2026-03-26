@@ -238,6 +238,18 @@ type PolicyConfigMetadata struct {
 
 // ApplyPolicyConfigDefaults applies default values to all missing fields.
 func ApplyPolicyConfigDefaults(cfg *PolicyConfig) error {
+	applyPathDefaults(cfg)
+	applyHygieneDefaults(cfg)
+	applyQualityDefaults(cfg)
+	applyRouterDefaults(cfg)
+	applyDocumentationDefaults(cfg)
+	applyScopeGuardDefaults(cfg)
+	applyAICompatibilityDefaults(cfg)
+	return nil
+}
+
+// applyPathDefaults populates the policy configuration with default scan roots and path prefixes.
+func applyPathDefaults(cfg *PolicyConfig) {
 	applyDefaultSlice(&cfg.Paths.ProductionRoots, []string{"internal", "cmd"})
 	applyDefaultSlice(&cfg.Paths.SecretScanRoots, []string{"internal", "cmd"})
 	applyDefaultSlice(&cfg.Paths.TestScanRoots, []string{"cmd", "internal", "."})
@@ -246,8 +258,11 @@ func ApplyPolicyConfigDefaults(cfg *PolicyConfig) error {
 	applyDefaultSlice(&cfg.Paths.AllowedTestPrefixes, []string{"internal/tests/"})
 	applyDefaultSlice(&cfg.Paths.LOCIgnorePrefixes, []string{"cmd/policycheck/"})
 	applyDefaultSlice(&cfg.Paths.HardcodedRuntimeKnobScanRoots, []string{"internal"})
-
 	applyDefaultSlice(&cfg.GoVersion.AllowedPrefixes, []string{"1.24", "1.25"})
+}
+
+// applyHygieneDefaults populates the policy configuration with default hygiene settings.
+func applyHygieneDefaults(cfg *PolicyConfig) {
 	applyDefaultSlice(&cfg.Hygiene.ScanRoots, []string{"internal", "cmd"})
 	applyDefaultSlice(&cfg.Hygiene.ExcludePrefixes, []string{"cmd/policycheck"})
 	applyDefaultInt(&cfg.Hygiene.MinNameTokens, 2)
@@ -258,6 +273,10 @@ func ApplyPolicyConfigDefaults(cfg *PolicyConfig) error {
 	applyDefaultInt(&cfg.PackageRules.MaxProductionFiles, 10)
 	applyDefaultInt(&cfg.PackageRules.MinConcerns, 1)
 	applyDefaultInt(&cfg.PackageRules.MaxConcerns, 2)
+}
+
+// applyQualityDefaults populates the policy configuration with default quality settings.
+func applyQualityDefaults(cfg *PolicyConfig) {
 	applyDefaultSlice(&cfg.FunctionQuality.EnabledLanguages, []string{"go", "python", "typescript"})
 	applyDefaultInt(&cfg.FunctionQuality.WarnParameterCount, 5)
 	applyDefaultInt(&cfg.FunctionQuality.MaxParameterCount, 7)
@@ -274,8 +293,15 @@ func ApplyPolicyConfigDefaults(cfg *PolicyConfig) error {
 	applyDefaultInt(&cfg.FunctionQuality.ErrorCTXAndLOCCTX, 10)
 	applyDefaultSlice(&cfg.SecretLogging.BenignHints, []string{"example", "sample", "placeholder", "dummy", "fake", "fixture", "redacted", "masked"})
 	applyDefaultSlice(&cfg.SecretLogging.PlaceholderStrings, []string{"<token>", "<password>", "<secret>", "<api-key>", "changeme", "change_me", "replace_me", "your_token_here"})
-	applyDefaultSlice(&cfg.AICompatibility.RequiredFlags, []string{"--ai", "--user"})
+}
 
+// applyAICompatibilityDefaults populates the policy configuration with default AI compatibility requirements.
+func applyAICompatibilityDefaults(cfg *PolicyConfig) {
+	applyDefaultSlice(&cfg.AICompatibility.RequiredFlags, []string{"--ai", "--user"})
+}
+
+// applyRouterDefaults populates the policy configuration with default router import boundaries.
+func applyRouterDefaults(cfg *PolicyConfig) {
 	applyDefaultSlice(&cfg.RouterImports.BusinessRoots, []string{"internal/policycheck", "internal/cliwrapper", "internal/ports"})
 	applyDefaultSlice(&cfg.RouterImports.AdapterRoots, []string{"internal/adapters"})
 	applyDefaultSlice(&cfg.RouterImports.RouterCoreRoots, []string{"internal/router"})
@@ -292,11 +318,27 @@ func ApplyPolicyConfigDefaults(cfg *PolicyConfig) error {
 	if !cfg.RouterImports.Enabled {
 		cfg.RouterImports.ForbiddenAdapterToAdapter = true
 	}
+}
 
+// applyScopeGuardDefaults populates the policy configuration with default scope guard restrictions.
+func applyScopeGuardDefaults(cfg *PolicyConfig) {
 	if cfg.ScopeGuard.Mode == "" {
 		cfg.ScopeGuard.Mode = ScopeGuardModeRestrict
 	}
+	applyDefaultSlice(&cfg.ScopeGuard.ForbiddenCalls, []string{
+		"os.WriteFile",
+		"os.Rename",
+		"os.Remove",
+		"os.RemoveAll",
+		"os.Chmod",
+		"os.Chown",
+		"os.Mkdir",
+		"os.MkdirAll",
+	})
+}
 
+// applyDocumentationDefaults populates the policy configuration with default documentation styles.
+func applyDocumentationDefaults(cfg *PolicyConfig) {
 	if cfg.Documentation.Level == "" {
 		cfg.Documentation.Level = "loose"
 	}
@@ -311,19 +353,6 @@ func ApplyPolicyConfigDefaults(cfg *PolicyConfig) error {
 		cfg.Documentation.TypeScriptStyle = "tsdoc"
 	}
 	applyDefaultSlice(&cfg.Documentation.PythonShebangRoots, []string{"scripts"})
-
-	applyDefaultSlice(&cfg.ScopeGuard.ForbiddenCalls, []string{
-		"os.WriteFile",
-		"os.Rename",
-		"os.Remove",
-		"os.RemoveAll",
-		"os.Chmod",
-		"os.Chown",
-		"os.Mkdir",
-		"os.MkdirAll",
-	})
-
-	return nil
 }
 
 // applyDefaultSlice sets a slice to its default value if it is currently empty.

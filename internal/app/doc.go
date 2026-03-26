@@ -1,9 +1,8 @@
 // internal/app/doc.go
-// Describes the app package's boot-time responsibilities for policycheck.
-// Keeps package documentation aligned with the enforced file-header contract.
-// Package app Provides application-level boot orchestration for the policycheck binary.
+// Package app Provides the application entry point and bootstrap logic.
+// It coordinates the initialization of the router and core services.
 //
 // Package Concerns:
-// - Booting router-backed application capabilities before command execution.
-// - Keeping entrypoint wiring isolated from feature-specific packages.
+// - Coordinates policycheck initialization and bootstrapping.
+// - Manages application lifecycle and router registration.
 package app

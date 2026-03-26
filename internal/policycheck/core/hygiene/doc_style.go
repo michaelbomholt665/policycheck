@@ -40,33 +40,52 @@ func CheckDocStyle(ctx context.Context, root string, cfg config.PolicyConfig) []
 	for _, scanRoot := range scanRoots {
 		absRoot := filepath.Join(root, scanRoot)
 		walk.WalkDirectoryTree(absRoot, func(path string, d fs.DirEntry, err error) error {
-			return collectDocViolations(root, path, d, err, cfg, &viols)
+			return collectDocViolations(docStyleContext{
+				root:  root,
+				path:  path,
+				d:     d,
+				err:   err,
+				cfg:   cfg,
+				viols: &viols,
+			})
 		})
 	}
 
 	return viols
 }
 
-// collectDocViolations is the per-entry walk callback. It filters irrelevant
-// entries before delegating to file-level checks.
-func collectDocViolations(
-	root, path string,
-	d fs.DirEntry,
-	err error,
-	cfg config.PolicyConfig,
-	viols *[]types.Violation,
-) error {
-	if err != nil || d.IsDir() || filepath.Ext(path) != ".go" {
+// docStyleContext holds context parameters for the per-entry walk callback
+// and file-level documentation validation functions.
+type docStyleContext struct {
+	root  string
+	path  string
+	d     fs.DirEntry
+	err   error
+	cfg   config.PolicyConfig
+	viols *[]types.Violation
+
+	// For validateSymbolDoc
+	name          string
+	kind          string
+	doc           *ast.CommentGroup
+	line          int
+	requirePrefix bool
+}
+
+// collectDocViolations filters irrelevant tree walking entries before delegating
+// to the appropriate file-level documentation checks.
+func collectDocViolations(sctx docStyleContext) error {
+	if sctx.err != nil || sctx.d.IsDir() || filepath.Ext(sctx.path) != ".go" {
 		return nil
 	}
-	if isSkippedFile(path) {
+	if isSkippedFile(sctx.path) {
 		return nil
 	}
-	rel := utils.ToSlashRel(root, path)
-	if isExcluded(rel, cfg.Hygiene.ExcludePrefixes) {
+	rel := utils.ToSlashRel(sctx.root, sctx.path)
+	if isExcluded(rel, sctx.cfg.Hygiene.ExcludePrefixes) {
 		return nil
 	}
-	*viols = append(*viols, checkFileDocStyle(root, path)...)
+	*sctx.viols = append(*sctx.viols, checkFileDocStyle(sctx.root, sctx.path)...)
 	return nil
 }
 
@@ -128,7 +147,14 @@ func checkFuncDoc(decl *ast.FuncDecl, rel string, fset *token.FileSet) []types.V
 	}
 	name := decl.Name.Name
 	line := fset.Position(decl.Pos()).Line
-	return validateSymbolDoc(rel, name, "function", decl.Doc, line, true)
+	return validateSymbolDoc(docStyleContext{
+		path:          rel,
+		name:          name,
+		kind:          "function",
+		doc:           decl.Doc,
+		line:          line,
+		requirePrefix: true,
+	})
 }
 
 // checkGenDeclDoc validates doc comments on exported type and value declarations.
@@ -158,7 +184,14 @@ func checkTypeDoc(spec *ast.TypeSpec, declDoc *ast.CommentGroup, rel string, fse
 	}
 	doc := resolveSpecDoc(spec.Doc, declDoc)
 	line := fset.Position(spec.Pos()).Line
-	return validateSymbolDoc(rel, spec.Name.Name, "type", doc, line, true)
+	return validateSymbolDoc(docStyleContext{
+		path:          rel,
+		name:          spec.Name.Name,
+		kind:          "type",
+		doc:           doc,
+		line:          line,
+		requirePrefix: true,
+	})
 }
 
 // checkValueDoc validates doc comments on exported variable and constant specs.
@@ -170,22 +203,27 @@ func checkValueDoc(spec *ast.ValueSpec, declDoc *ast.CommentGroup, rel string, f
 			continue
 		}
 		line := fset.Position(name.Pos()).Line
-		viols = append(viols, validateSymbolDoc(rel, name.Name, "symbol", doc, line, false)...)
+		viols = append(viols, validateSymbolDoc(docStyleContext{
+			path:          rel,
+			name:          name.Name,
+			kind:          "symbol",
+			doc:           doc,
+			line:          line,
+			requirePrefix: false,
+		})...)
 	}
 	return viols
 }
 
 // validateSymbolDoc runs presence and quality checks against a symbol's doc comment.
-//
-// When requirePrefix is true, the comment must begin with the symbol name.
-func validateSymbolDoc(rel, name, kind string, doc *ast.CommentGroup, line int, requirePrefix bool) []types.Violation {
-	if requirePrefix && !HasDocWithPrefix(doc, name) {
-		return []types.Violation{missingPrefixViolation(rel, name, kind, line)}
+func validateSymbolDoc(sctx docStyleContext) []types.Violation {
+	if sctx.requirePrefix && !HasDocWithPrefix(sctx.doc, sctx.name) {
+		return []types.Violation{missingPrefixViolation(sctx.path, sctx.name, sctx.kind, sctx.line)}
 	}
-	if !requirePrefix && !HasAnyDoc(doc) {
-		return []types.Violation{missingDocViolation(rel, name, line)}
+	if !sctx.requirePrefix && !HasAnyDoc(sctx.doc) {
+		return []types.Violation{missingDocViolation(sctx.path, sctx.name, sctx.line)}
 	}
-	return checkDocQuality(rel, name, doc, line)
+	return checkDocQuality(sctx.path, sctx.name, sctx.doc, sctx.line)
 }
 
 // checkDocQuality validates the content of an existing doc comment for word

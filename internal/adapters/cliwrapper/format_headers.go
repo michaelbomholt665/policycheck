@@ -22,6 +22,7 @@ type HeaderFormatterAdapter struct {
 	writeFile   func(string, []byte, fs.FileMode) error
 }
 
+// HeaderFormatterDeps holds the dependency seams for the header formatter adapter.
 type HeaderFormatterDeps struct {
 	ResolveWalk func() (ports.WalkProvider, error)
 	ResolveRoot func() (string, error)
