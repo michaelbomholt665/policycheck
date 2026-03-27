@@ -1,4 +1,7 @@
-// Package telemetry Is a router capability extension that registers an optional
+// internal/router/ext/extensions/telemetry/doc.go
+// Provides documentation for the optional telemetry capabilities extension.
+
+// Package telemetry is a router capability extension that registers an optional
 // telemetry provider before application extensions boot.
 //
 // Usage:

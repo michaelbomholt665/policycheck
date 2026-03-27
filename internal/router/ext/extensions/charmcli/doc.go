@@ -1,3 +1,6 @@
+// internal/router/ext/extensions/charmcli/doc.go
+// Provides documentation for the optional CLI interaction provider extension.
+
 // Package charmcli is a router capability extension that registers an optional
 // CLI chrome and interaction provider backed by Charm libraries.
 //

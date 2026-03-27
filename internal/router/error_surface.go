@@ -1,3 +1,7 @@
+// internal/router/error_surface.go
+// Defines the structured error types and error formatting catalog for the router.
+// It centralizes all failure modes and standardizes error representation across extensions.
+
 package router
 
 import "fmt"
@@ -84,11 +88,17 @@ var routerErrorCatalog = map[RouterErrorCode]routerErrorDescriptor{
 var routerErrorRenderer = defaultRouterErrorRenderer
 
 // renderRouterError renders a router error through the active internal renderer seam.
+//
+// It serves as the single point of entry for error stringification, allowing for
+// custom formatters (like colored CLI output) to intercept error representations.
 func renderRouterError(err *RouterError) string {
 	return routerErrorRenderer(err)
 }
 
 // defaultRouterErrorRenderer renders router errors using the canonical router catalog.
+//
+// It falls back to the underlying error text if the error code is not present
+// or if the specific descriptor lacks a rendering function.
 func defaultRouterErrorRenderer(err *RouterError) string {
 	if err == nil {
 		return ""
@@ -107,6 +117,9 @@ func defaultRouterErrorRenderer(err *RouterError) string {
 }
 
 // renderRouterErrorCause appends an underlying cause to a fallback router message.
+//
+// It is used internally for warnings or fatal errors where a generic operational
+// description needs to carry forward the specific implementation failure reason.
 func renderRouterErrorCause(err *RouterError, fallback string) string {
 	if err == nil {
 		return fallback

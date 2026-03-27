@@ -1,7 +1,11 @@
+// internal/router/ext/extensions/charmcli/extension.go
+// Defines the strictly typed router extension for the charmcli capability.
+
 package charmcli
 
 import (
 	"fmt"
+	"log"
 
 	"policycheck/internal/router"
 )
@@ -34,5 +38,6 @@ func (e *Extension) RouterProvideRegistration(reg *router.Registry) error {
 		return fmt.Errorf("charmcli extension interaction: %w", err)
 	}
 
+	log.Printf("charmcli extension initialized")
 	return nil
 }

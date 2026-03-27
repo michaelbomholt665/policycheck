@@ -1,3 +1,5 @@
+// internal/adapters/readfile/doc.go
+//
 // Package readfile Provides the router-backed file reading adapter.
 //
 // Package Concerns:

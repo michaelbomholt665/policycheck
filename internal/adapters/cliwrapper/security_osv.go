@@ -11,6 +11,8 @@ import (
 	"os"
 	osexec "os/exec"
 	"strings"
+
+	"policycheck/internal/ports"
 )
 
 const (
@@ -51,12 +53,12 @@ type osvBatchResponse struct {
 // OSVSecurityAdapter satisfies its port by injecting dependency on the OSV HTTP
 // endpoint; it does not import or call any policycheck analysis-engine code.
 type OSVSecurityAdapter struct {
-	defaultConfig WrapperSecurityConfig
+	defaultConfig ports.WrapperSecurityConfig
 	httpClient    *http.Client
 }
 
 // NewOSVSecurityAdapter returns a configured OSVSecurityAdapter.
-func NewOSVSecurityAdapter(defaultConfig WrapperSecurityConfig) *OSVSecurityAdapter {
+func NewOSVSecurityAdapter(defaultConfig ports.WrapperSecurityConfig) *OSVSecurityAdapter {
 	return &OSVSecurityAdapter{
 		defaultConfig: defaultConfig,
 		httpClient:    &http.Client{},
@@ -83,8 +85,8 @@ func (a *OSVSecurityAdapter) CheckPackages(ctx context.Context, _ string, purls 
 		return fmt.Errorf("osv security adapter: evaluate advisories: %w", err)
 	}
 
-	if result.Decision != DecisionAllow {
-		return &RiskBlockError{
+	if result.Decision != ports.DecisionAllow {
+		return &ports.RiskBlockError{
 			Severity: result.BlockingSeverity,
 			Reason:   fmt.Sprintf("osv security adapter: %s", result.BlockReason),
 		}
@@ -119,8 +121,8 @@ func (a *OSVSecurityAdapter) CheckLockfile(ctx context.Context, _ string, lockfi
 	if err != nil {
 		return fmt.Errorf("osv security adapter: evaluate advisories: %w", err)
 	}
-	if result.Decision != DecisionAllow {
-		return &RiskBlockError{
+	if result.Decision != ports.DecisionAllow {
+		return &ports.RiskBlockError{
 			Severity: result.BlockingSeverity,
 			Reason:   fmt.Sprintf("osv security adapter: %s", result.BlockReason),
 		}
@@ -139,16 +141,16 @@ func buildOSVQueries(purls []string) []osvPURL {
 	return queries
 }
 
-func (a *OSVSecurityAdapter) evaluateAdvisories(advisories []Advisory) (SecurityResult, error) {
+func (a *OSVSecurityAdapter) evaluateAdvisories(advisories []ports.WrapperAdvisory) (ports.SecurityResult, error) {
 	coreProvider, err := resolveWrapperCore()
 	if err != nil {
-		return SecurityResult{}, fmt.Errorf("resolve wrapper core: %w", err)
+		return ports.SecurityResult{}, fmt.Errorf("resolve wrapper core: %w", err)
 	}
 
 	cfg, err := loadActiveAdapterConfig()
 	if err != nil {
 		if isZeroSecurityConfig(a.defaultConfig) {
-			return SecurityResult{}, err
+			return ports.SecurityResult{}, err
 		}
 
 		return coreProvider.EvaluateSecurityPolicy(a.defaultConfig, advisories), nil
@@ -157,14 +159,14 @@ func (a *OSVSecurityAdapter) evaluateAdvisories(advisories []Advisory) (Security
 	return coreProvider.EvaluateSecurityPolicy(cfg.Security, advisories), nil
 }
 
-func isZeroSecurityConfig(cfg WrapperSecurityConfig) bool {
+func isZeroSecurityConfig(cfg ports.WrapperSecurityConfig) bool {
 	return len(cfg.BlockOn) == 0 &&
 		len(cfg.WarnOn) == 0 &&
 		len(cfg.AllowOn) == 0 &&
 		cfg.OSVMode == ""
 }
 
-func (a *OSVSecurityAdapter) scanPackages(ctx context.Context, purls []string) ([]Advisory, error) {
+func (a *OSVSecurityAdapter) scanPackages(ctx context.Context, purls []string) ([]ports.WrapperAdvisory, error) {
 	if cliPath, ok := lookupOSVCLI(); ok {
 		advisories, err := a.runOSVCLIPackageScan(ctx, cliPath, purls)
 		if err == nil {
@@ -180,7 +182,7 @@ func (a *OSVSecurityAdapter) scanPackagesViaAPI(
 	ctx context.Context,
 	purls []string,
 	cliErr error,
-) ([]Advisory, error) {
+) ([]ports.WrapperAdvisory, error) {
 	queries := buildOSVQueries(purls)
 	resp, err := a.runOSVQuery(ctx, queries)
 	if err != nil {
@@ -230,7 +232,7 @@ func (a *OSVSecurityAdapter) runOSVCLIPackageScan(
 	ctx context.Context,
 	cliPath string,
 	purls []string,
-) ([]Advisory, error) {
+) ([]ports.WrapperAdvisory, error) {
 	args := []string{"scan", "--format", "json"}
 	for _, purl := range purls {
 		args = append(args, "--package", purl)
@@ -243,7 +245,7 @@ func (a *OSVSecurityAdapter) runOSVCLILockfileScan(
 	ctx context.Context,
 	cliPath string,
 	lockfilePath string,
-) ([]Advisory, error) {
+) ([]ports.WrapperAdvisory, error) {
 	return a.runOSVCLI(ctx, cliPath, []string{"--lockfile=" + lockfilePath, "--format", "json"})
 }
 
@@ -251,7 +253,7 @@ func (a *OSVSecurityAdapter) runOSVCLI(
 	ctx context.Context,
 	cliPath string,
 	args []string,
-) ([]Advisory, error) {
+) ([]ports.WrapperAdvisory, error) {
 	cmd := newManagedCommand(ctx, cliPath, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil && len(output) == 0 {
@@ -285,12 +287,12 @@ func (a *OSVSecurityAdapter) runOSVCLI(
 
 // collectAdvisories flattens all vulnerability entries from the batch response
 // into a slice of Advisory values for EvaluateSeverity.
-func collectAdvisories(resp osvBatchResponse) []Advisory {
-	var out []Advisory
+func collectAdvisories(resp osvBatchResponse) []ports.WrapperAdvisory {
+	var out []ports.WrapperAdvisory
 	for _, entry := range resp.Results {
 		for _, vuln := range entry.Vulns {
 			sev := extractSeverityLabel(vuln)
-			out = append(out, Advisory{
+			out = append(out, ports.WrapperAdvisory{
 				ID:       vuln.ID,
 				Summary:  vuln.Summary,
 				Severity: sev,
@@ -322,7 +324,7 @@ func lookupOSVCLI() (string, bool) {
 	return "", false
 }
 
-func parseOSVCLIAdvisories(raw []byte) ([]Advisory, error) {
+func parseOSVCLIAdvisories(raw []byte) ([]ports.WrapperAdvisory, error) {
 	if len(bytes.TrimSpace(raw)) == 0 {
 		return nil, fmt.Errorf("empty osv cli output")
 	}
@@ -332,10 +334,10 @@ func parseOSVCLIAdvisories(raw []byte) ([]Advisory, error) {
 		return nil, fmt.Errorf("decode osv cli json: %w", err)
 	}
 
-	found := make(map[string]Advisory)
+	found := make(map[string]ports.WrapperAdvisory)
 	collectCLIAdvisories(payload, found)
 
-	advisories := make([]Advisory, 0, len(found))
+	advisories := make([]ports.WrapperAdvisory, 0, len(found))
 	for _, advisory := range found {
 		advisories = append(advisories, advisory)
 	}
@@ -343,7 +345,7 @@ func parseOSVCLIAdvisories(raw []byte) ([]Advisory, error) {
 	return advisories, nil
 }
 
-func collectCLIAdvisories(node any, found map[string]Advisory) {
+func collectCLIAdvisories(node any, found map[string]ports.WrapperAdvisory) {
 	switch typed := node.(type) {
 	case map[string]any:
 		if rawVulns, ok := typed["vulnerabilities"]; ok {
@@ -362,7 +364,7 @@ func collectCLIAdvisories(node any, found map[string]Advisory) {
 	}
 }
 
-func appendCLIAdvisories(raw any, found map[string]Advisory) {
+func appendCLIAdvisories(raw any, found map[string]ports.WrapperAdvisory) {
 	items, ok := raw.([]any)
 	if !ok {
 		return
@@ -374,7 +376,7 @@ func appendCLIAdvisories(raw any, found map[string]Advisory) {
 			continue
 		}
 
-		advisory := Advisory{
+		advisory := ports.WrapperAdvisory{
 			ID:       stringValue(vuln["id"]),
 			Summary:  stringValue(vuln["summary"]),
 			Severity: extractCLISeverity(vuln),

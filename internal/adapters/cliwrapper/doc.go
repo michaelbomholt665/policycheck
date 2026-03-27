@@ -1,3 +1,5 @@
+// internal/adapters/cliwrapper/doc.go
+//
 // Package cliwrapper Provides router-wired adapters for the CLI wrapper subsystem.
 //
 // Package Concerns:

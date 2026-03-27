@@ -1,3 +1,6 @@
+// internal/router/tools/wrlk/doc.go
+// Provides documentation for the router tooling CLI.
+
 // Package main Provides the router-local wrlk CLI.
 //
 // Package Concerns:

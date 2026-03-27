@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os/exec"
 	"time"
+
+	"policycheck/internal/ports"
 )
 
 // CommandExitError distinguishes a child-process failure from wrapper-side
@@ -35,11 +37,11 @@ func (e *CommandExitError) Unwrap() error {
 	return e.Err
 }
 
-// OsExec is the production ExecFunc implementation.
+// OsExec is the production exec-function implementation.
 //
 // OsExec runs args[0] with args[1:] as arguments, inheriting the current
 // process environment and stdio streams. It is injected into WrapperDispatcher
-// by the extension wiring; tests use their own ExecFunc double.
+// by the extension wiring; tests use their own exec-function double.
 func OsExec(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("os exec: empty args")
@@ -87,6 +89,6 @@ func wrapCommandExitError(commandName string, err error) error {
 	return err
 }
 
-// defaultExecFunc is the ExecFunc the extension uses when building production
+// defaultExecFunc is the exec function the extension uses when building production
 // WrapperDispatcher instances.
-var defaultExecFunc ExecFunc = OsExec
+var defaultExecFunc ports.ExecFunc = OsExec

@@ -1,13 +1,15 @@
+// internal/router/ext/extensions/charmcli/provider.go
+// Implements the interactive CLI prompts and spatial layout rendering.
+
 package charmcli
 
 import (
 	"fmt"
 	"strings"
 
-	"policycheck/internal/router/capabilities"
-
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"policycheck/internal/router/capabilities"
 )
 
 var (
@@ -120,14 +122,11 @@ func (p *Provider) StyleLayout(kind string, title string, content ...string) (st
 }
 
 // StyleTable is intentionally unsupported for charmcli; use prettystyle for tables.
-func (p *Provider) StyleTable(kind string, headers []string, rows [][]string) (string, error) {
-	_ = kind
-	_ = headers
-	_ = rows
-
+func (p *Provider) StyleTable(_ string, _ []string, _ [][]string) (string, error) {
 	return "", fmt.Errorf("style table: charmcli does not render tables; use prettystyle")
 }
 
+// runSelect executes a single-choice interactive prompt.
 func (p *Provider) runSelect(
 	title string,
 	description string,
@@ -161,6 +160,7 @@ func (p *Provider) runSelect(
 	return result, nil
 }
 
+// runToggle executes a multi-choice interactive prompt.
 func (p *Provider) runToggle(
 	title string,
 	description string,
@@ -194,6 +194,7 @@ func (p *Provider) runToggle(
 	return result, nil
 }
 
+// runConfirm executes a yes/no interactive prompt.
 func (p *Provider) runConfirm(title string, description string, theme *huh.Theme) (bool, error) {
 	result := false
 	form := huh.NewForm(
@@ -212,6 +213,7 @@ func (p *Provider) runConfirm(title string, description string, theme *huh.Theme
 	return result, nil
 }
 
+// runInput executes a free-text interactive prompt.
 func (p *Provider) runInput(title string, description string, theme *huh.Theme) (string, error) {
 	result := ""
 	form := huh.NewForm(
@@ -237,6 +239,7 @@ func (p *Provider) runInput(title string, description string, theme *huh.Theme) 
 	return result, nil
 }
 
+// execute abstracts form execution to support test injection.
 func (p *Provider) execute(form *huh.Form) error {
 	if p.RunForm != nil {
 		return p.RunForm(form)
@@ -245,6 +248,7 @@ func (p *Provider) execute(form *huh.Form) error {
 	return form.Run()
 }
 
+// newTheme initializes the standard charmcli rendering theme.
 func (p *Provider) newTheme() *huh.Theme {
 	theme := huh.ThemeCharm()
 	theme.Focused.Title = lipgloss.NewStyle().Foreground(colorHiMagenta).Bold(true)
@@ -254,10 +258,12 @@ func (p *Provider) newTheme() *huh.Theme {
 	return theme
 }
 
+// styleTitle applies consistent title formatting.
 func (p *Provider) styleTitle(title string) string {
 	return titleStyle.Render(title)
 }
 
+// styleDescription applies consistent description formatting.
 func (p *Provider) styleDescription(description string) string {
 	if description == "" {
 		return description
@@ -266,6 +272,7 @@ func (p *Provider) styleDescription(description string) string {
 	return descStyle.Render(description)
 }
 
+// renderTaggedLine builds a prefixed, colored log line.
 func (p *Provider) renderTaggedLine(tag string, color lipgloss.Color, input string) string {
 	tagStyle := lipgloss.NewStyle().
 		Foreground(color).
@@ -275,6 +282,7 @@ func (p *Provider) renderTaggedLine(tag string, color lipgloss.Color, input stri
 	return tagStyle.Render("["+tag+"]") + " " + bodyStyle.Render(input)
 }
 
+// renderGutterLayout structures content with a fixed left margin label.
 func (p *Provider) renderGutterLayout(title string, content []string) string {
 	label := strings.ToUpper(strings.TrimSpace(title))
 	if label == "" {
@@ -302,6 +310,7 @@ func (p *Provider) renderGutterLayout(title string, content []string) string {
 	return strings.Join(rendered, "\n")
 }
 
+// withSplitGap interleaves a standard gap string between layout columns.
 func (p *Provider) withSplitGap(content []string) []string {
 	if len(content) == 0 {
 		return nil

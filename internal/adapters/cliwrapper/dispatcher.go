@@ -22,9 +22,9 @@ import (
 // injected ExecFunc handles all subprocess execution so tests can verify
 // orchestration without starting real processes.
 type WrapperDispatcher struct {
-	cfg                  WrapperConfig
-	exec                 ExecFunc
-	loadConfig           func() (WrapperConfig, error)
+	cfg                  ports.WrapperConfig
+	exec                 ports.ExecFunc
+	loadConfig           func() (ports.WrapperConfig, error)
 	coreResolver         func() (ports.CLIWrapperCore, error)
 	securityGateResolver func() (ports.CLIWrapperSecurityGate, error)
 	macroRunnerResolver  func() (ports.CLIWrapperMacroRunner, error)
@@ -45,7 +45,7 @@ type WrapperResolvers struct {
 // The security gate is resolved from the router at each Dispatch call; callers
 // must not pass it here. Tests pass an ExecFunc recorder; production callers
 // pass OsExec.
-func NewWrapperDispatcher(cfg WrapperConfig, exec ExecFunc) *WrapperDispatcher {
+func NewWrapperDispatcher(cfg ports.WrapperConfig, exec ports.ExecFunc) *WrapperDispatcher {
 	return &WrapperDispatcher{
 		cfg:                  cfg,
 		exec:                 exec,
@@ -60,8 +60,8 @@ func NewWrapperDispatcher(cfg WrapperConfig, exec ExecFunc) *WrapperDispatcher {
 // NewWrapperDispatcherWithResolver returns a WrapperDispatcher with an injected
 // security-gate resolver for tests or alternate host seams.
 func NewWrapperDispatcherWithResolver(
-	cfg WrapperConfig,
-	exec ExecFunc,
+	cfg ports.WrapperConfig,
+	exec ports.ExecFunc,
 	resolver func() (ports.CLIWrapperSecurityGate, error),
 ) *WrapperDispatcher {
 	dispatcher := NewWrapperDispatcher(cfg, exec)
@@ -73,8 +73,8 @@ func NewWrapperDispatcherWithResolver(
 // NewWrapperDispatcherWithResolvers returns a WrapperDispatcher with injected
 // router-provider resolvers for tests or alternate boot seams.
 func NewWrapperDispatcherWithResolvers(
-	cfg WrapperConfig,
-	exec ExecFunc,
+	cfg ports.WrapperConfig,
+	exec ports.ExecFunc,
 	resolvers WrapperResolvers,
 ) *WrapperDispatcher {
 	dispatcher := NewWrapperDispatcher(cfg, exec)
@@ -114,15 +114,15 @@ func (d *WrapperDispatcher) Dispatch(ctx context.Context, args []string) error {
 	}
 
 	switch mode {
-	case ModePackageGate:
+	case ports.ModePackageGate:
 		return d.dispatchPackageGate(ctx, args)
-	case ModeToolingGate:
+	case ports.ModeToolingGate:
 		return d.dispatchToolingGate(ctx, args)
-	case ModeMacroRun:
+	case ports.ModeMacroRun:
 		return d.dispatchMacroRun(ctx, args)
-	case ModeFormatHeaders:
+	case ports.ModeFormatHeaders:
 		return d.dispatchFormatHeaders(ctx, args)
-	case ModePassthrough:
+	case ports.ModePassthrough:
 		return d.dispatchPassthrough(ctx, args)
 	default:
 		return fmt.Errorf("dispatcher: mode %v not yet implemented: %w", mode, errNotImplemented)
@@ -130,14 +130,14 @@ func (d *WrapperDispatcher) Dispatch(ctx context.Context, args []string) error {
 }
 
 // staticWrapperConfigLoader returns a config loader that always returns cfg.
-func staticWrapperConfigLoader(cfg WrapperConfig) func() (WrapperConfig, error) {
-	return func() (WrapperConfig, error) {
+func staticWrapperConfigLoader(cfg ports.WrapperConfig) func() (ports.WrapperConfig, error) {
+	return func() (ports.WrapperConfig, error) {
 		return cfg, nil
 	}
 }
 
 // loadActiveDispatcherConfig returns the wrapper configuration from the host.
-func loadActiveDispatcherConfig() (WrapperConfig, error) {
+func loadActiveDispatcherConfig() (ports.WrapperConfig, error) {
 	return loadActiveAdapterConfig()
 }
 
@@ -272,12 +272,12 @@ func (d *WrapperDispatcher) dispatchFormatHeaders(ctx context.Context, args []st
 		return fmt.Errorf("dispatcher: format headers: resolve formatter: %w", err)
 	}
 
-	dryRun, only, err := parseFormatHeadersArgs(args)
+	dryRun, list, only, err := parseFormatHeadersArgs(args)
 	if err != nil {
 		return fmt.Errorf("dispatcher: format headers: parse args: %w", err)
 	}
 
-	if err := formatter.FormatHeaders(ctx, dryRun, only); err != nil {
+	if err := formatter.FormatHeaders(ctx, dryRun, list, only); err != nil {
 		return fmt.Errorf("dispatcher: format headers: %w", err)
 	}
 
@@ -330,7 +330,7 @@ func resolveFormatter() (ports.CLIWrapperFormatter, error) {
 }
 
 // collectMacroNames extracts registered macro names from the config.
-func collectMacroNames(cfg WrapperConfig) []string {
+func collectMacroNames(cfg ports.WrapperConfig) []string {
 	names := make([]string, len(cfg.Macros))
 	for i, m := range cfg.Macros {
 		names[i] = m.Name
@@ -339,35 +339,39 @@ func collectMacroNames(cfg WrapperConfig) []string {
 	return names
 }
 
-func detectWrapperMode(resolver func() (ports.CLIWrapperCore, error), args []string, macroNames []string) (WrapperMode, error) {
+func detectWrapperMode(resolver func() (ports.CLIWrapperCore, error), args []string, macroNames []string) (ports.WrapperMode, error) {
 	coreProvider, err := resolver()
 	if err != nil {
-		return ModePassthrough, err
+		return ports.ModePassthrough, err
 	}
 
 	return coreProvider.Detect(args, macroNames), nil
 }
 
 // parseFormatHeadersArgs parses CLI flags for the header-formatting command.
-func parseFormatHeadersArgs(args []string) (bool, []string, error) {
+func parseFormatHeadersArgs(args []string) (bool, bool, []string, error) {
 	if len(args) < 2 {
-		return false, nil, fmt.Errorf("expected 'fmt headers' or '<tool> fmt headers'")
+		return false, false, nil, fmt.Errorf("expected 'fmt headers' or '<tool> fmt headers'")
 	}
 
 	startIndex := 3
 	if args[0] == "fmt" && args[1] == "headers" {
 		startIndex = 2
 	} else if len(args) < 3 {
-		return false, nil, fmt.Errorf("expected '<tool> fmt headers'")
+		return false, false, nil, fmt.Errorf("expected '<tool> fmt headers'")
 	}
 
 	dryRun := false
+	list := false
 	only := make([]string, 0)
 
 	for index := startIndex; index < len(args); {
 		switch args[index] {
 		case "--dry-run":
 			dryRun = true
+			index++
+		case "--list":
+			list = true
 			index++
 		case "--only":
 			index++
@@ -377,14 +381,14 @@ func parseFormatHeadersArgs(args []string) (bool, []string, error) {
 				index++
 			}
 			if len(only) == start {
-				return false, nil, fmt.Errorf("--only requires at least one language")
+				return false, false, nil, fmt.Errorf("--only requires at least one language")
 			}
 		default:
-			return false, nil, fmt.Errorf("unknown format headers arg %q", args[index])
+			return false, false, nil, fmt.Errorf("unknown format headers arg %q", args[index])
 		}
 	}
 
-	return dryRun, only, nil
+	return dryRun, list, only, nil
 }
 
 func parseAllowRiskArgs(resolver func() (ports.CLIWrapperCore, error), args []string) ([]string, string, error) {
@@ -416,7 +420,7 @@ func parseAllowRiskArgs(resolver func() (ports.CLIWrapperCore, error), args []st
 }
 
 func resolveRiskOverride(resolver func() (ports.CLIWrapperCore, error), allowRisk string, err error) error {
-	var blockErr *RiskBlockError
+	var blockErr *ports.RiskBlockError
 	if !errors.As(err, &blockErr) {
 		return err
 	}

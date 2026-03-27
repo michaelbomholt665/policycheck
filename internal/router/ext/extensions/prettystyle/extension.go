@@ -1,7 +1,11 @@
+// internal/router/ext/extensions/prettystyle/extension.go
+// Defines the strictly typed router extension for the prettystyle capability.
+
 package prettystyle
 
 import (
 	"fmt"
+	"log"
 
 	"policycheck/internal/router"
 )
@@ -31,5 +35,6 @@ func (e *Extension) RouterProvideRegistration(reg *router.Registry) error {
 		return fmt.Errorf("prettystyle extension: %w", err)
 	}
 
+	log.Printf("prettystyle extension initialized")
 	return nil
 }

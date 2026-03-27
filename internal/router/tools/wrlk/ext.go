@@ -1,3 +1,7 @@
+// internal/router/tools/wrlk/ext.go
+// Defines commands and logic for scaffolding, installing, and removing
+// router capabilities and application extensions.
+
 package main
 
 import (
@@ -308,9 +312,9 @@ func RouterPerformExtensionAdd(
 	spec extCommandSpec,
 ) error {
 	compositionPath := filepath.Join(root, filepath.FromSlash(spec.compositionRelPath))
-	compositionContent, err := os.ReadFile(compositionPath)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", filepath.Base(spec.compositionRelPath), err)
+	compositionContent, readErr := os.ReadFile(compositionPath)
+	if readErr != nil {
+		return fmt.Errorf("read %s: %w", filepath.Base(spec.compositionRelPath), readErr)
 	}
 
 	if err := RouterEnsureExtensionExistsForWiring(root, name, spec); err != nil {
@@ -535,14 +539,18 @@ func RouterInsertExtensionEntry(src string, closingBrace int, entryLine string) 
 }
 
 // RouterReadModulePath reads the module path from go.mod in the given root.
-func RouterReadModulePath(root string) (string, error) {
+func RouterReadModulePath(root string) (_ string, returnErr error) {
 	goModPath := filepath.Join(root, "go.mod")
 
 	file, err := os.Open(goModPath)
 	if err != nil {
 		return "", fmt.Errorf("open go.mod: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil && returnErr == nil {
+			returnErr = fmt.Errorf("close go.mod: %w", closeErr)
+		}
+	}()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -592,8 +600,6 @@ func RouterExtExtensionTemplate(name, modulePath string, spec extCommandSpec) st
 	return fmt.Sprintf(`package %s
 
 import (
-	"fmt"
-
 	"log"
 
 	"%s/internal/router"
@@ -618,15 +624,13 @@ func (e *Extension) Provides() []router.PortName {
 }
 
 // RouterProvideRegistration registers the %s provider into the boot registry.
-func (e *Extension) RouterProvideRegistration(reg *router.Registry) error {
+func (e *Extension) RouterProvideRegistration(_ *router.Registry) error {
 	// TODO: replace with the actual port and provider.
 	// Example:
 	//   if err := reg.RouterRegisterProvider(router.Port%s, yourProvider); err != nil {
 	//       return fmt.Errorf("%s extension: %%w", err)
 	//   }
 	log.Printf("%s extension initialized")
-	_ = fmt.Sprintf
-	_ = reg
 
 	return nil
 }
@@ -732,32 +736,32 @@ func RouterWriteExtSnapshotBeforeMutation(root, reason string) error {
 }
 
 // RouterCaptureNamedSnapshot builds a snapshot for an explicit list of relative file paths.
-func RouterCaptureNamedSnapshot(root, reason string, files []string) (routerFileSnapshot, error) {
-	snapshotFiles := make([]routerSnapshotFile, 0, len(files))
+func RouterCaptureNamedSnapshot(root, reason string, files []string) (routerMutationSnapshot, error) {
+	snapshotFiles := make([]routerMutationSnapshotFile, 0, len(files))
 
 	for _, relativePath := range files {
 		absolutePath := filepath.Join(root, filepath.FromSlash(relativePath))
 		content, err := os.ReadFile(absolutePath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				snapshotFiles = append(snapshotFiles, routerSnapshotFile{
+				snapshotFiles = append(snapshotFiles, routerMutationSnapshotFile{
 					File:   relativePath,
 					Exists: false,
 				})
 				continue
 			}
 
-			return routerFileSnapshot{}, fmt.Errorf("read ext snapshot file %s: %w", relativePath, err)
+			return routerMutationSnapshot{}, fmt.Errorf("read ext snapshot file %s: %w", relativePath, err)
 		}
 
-		snapshotFiles = append(snapshotFiles, routerSnapshotFile{
+		snapshotFiles = append(snapshotFiles, routerMutationSnapshotFile{
 			File:    relativePath,
 			Exists:  true,
 			Content: string(content),
 		})
 	}
 
-	return routerFileSnapshot{
+	return routerMutationSnapshot{
 		CreatedAt: RouterSnapshotTimestamp(),
 		Reason:    reason,
 		Files:     snapshotFiles,

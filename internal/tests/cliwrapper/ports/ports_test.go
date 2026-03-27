@@ -63,4 +63,6 @@ func (macroProxy) RunMacro(_ context.Context, _ string) error { return nil }
 
 type formatterProxy struct{}
 
-func (formatterProxy) FormatHeaders(_ context.Context, _ bool, _ []string) error { return nil }
+func (formatterProxy) FormatHeaders(_ context.Context, _ bool, _ bool, _ []string) error {
+	return nil
+}

@@ -10,6 +10,17 @@
 **Author:** Michael  
 **Date:** 2026-03-25
 
+## Implementation Reconciliation Note (2026-03-27)
+
+The current implementation intentionally ships a reduced interaction surface for the wrapper MVP:
+
+- Moderate-risk package findings are block-or-override only; interactive TTY prompts are deferred.
+- Macro execution uses the shared `internal/cliwrapper` core, but `run --dry-run` and prompted template-variable collection are deferred.
+- `fmt headers --dry-run` is implemented and CI-safe; it exits non-zero when files would change.
+- Package-block output is intentionally plain wrapper error text with an explicit `--allow-risk=<level>` hint, rather than the richer styled advisory rendering sketched below.
+
+These reductions keep the shared binary and router-linking surface stable while the remaining UX work is completed in follow-up phases.
+
 ---
 
 ## 1. Overview
@@ -60,6 +71,7 @@ policycheck config init --global    # scaffold global config
 
 policycheck fmt headers             # inject path-comment headers into all supported files
 policycheck fmt headers --dry-run   # preview changes without writing
+policycheck fmt headers --dry-run --list   # preview exactly which files would change
 policycheck fmt headers --only go   # restrict to one or more languages
 policycheck fmt headers --only python typescript
 ```
@@ -107,9 +119,9 @@ parse packages from args
   ├─► no vulns → run install command
   │
   ├─► vulns found
-  │     ├─► CRITICAL / HIGH ──► block, print advisory, exit 1
+  │     ├─► CRITICAL / HIGH ──► block, print reason + override hint, exit 1
   │     │                        └─► --allow-risk=high to override
-  │     ├─► MODERATE ───────► warn + prompt y/n (non-TTY: block)
+  │     ├─► MODERATE ───────► block or override (interactive prompt deferred)
   │     └─► LOW / INFO ─────► warn only, proceed
   │
   └─► Phase 2: post-install lockfile scan (catches transitive deps)
@@ -158,7 +170,12 @@ osv-scanner fix -M path/to/package.json -L path/to/package-lock.json
 osv-scanner scan image --serve alpine:3.12
 ```
 
-**Output format:**
+**Current output shape (MVP):**
+```
+dispatcher: package gate: pre-install scan: critical vulnerability in lodash; use --allow-risk=critical to override
+```
+
+**Future styled output example:**
 ```
 [policycheck] ⚑ OSV scan: fastapi@0.111.0
 [policycheck] ✗ CRITICAL  CVE-2024-XXXX  fastapi  path: starlette → httpx
@@ -213,9 +230,15 @@ Then: `policycheck run go-test`
 
 **Purpose:** Named, multi-step command sequences configured globally or per-repo. Reduces repetitive multi-command invocations to a single `policycheck run <name>`.
 
-**Invocation:**
+**Planned invocation:**
 ```
 policycheck run <macro-name> [--dry-run] [--verbose]
+```
+
+**Current invocation (MVP):**
+```
+policycheck run <macro-name>
+policycheck <macro-name>
 ```
 
 **Macro definition (TOML):**
@@ -241,9 +264,9 @@ steps = [
 on_failure = "stop"
 ```
 
-**Template variables:** Any step with `{{.varname}}` will prompt the user at runtime. Variables can also be supplied as flags: `policycheck run commit-push --message="fix: typo"`.
+**Template variables:** Prompted runtime collection is deferred in the MVP. Macros currently require all template variables to be supplied by the caller through the loaded config/runtime variable map; missing variables fail the run with an explicit error.
 
-**`--dry-run`:** Prints each step without executing. Useful for auditing macros before running.
+**`--dry-run`:** Deferred for macro runs in the MVP. `fmt headers --dry-run` is implemented; macro dry-run is a follow-up item.
 
 **`on_failure` semantics:**
 - `stop` — halt at failing step, terminate all child processes spawned by that step, report error, exit 1 *(default)*
@@ -330,7 +353,7 @@ on_failure = "stop"
 
 **Invocation:**
 ```
-policycheck fmt headers [--dry-run] [--only <lang>...]
+policycheck fmt headers [--dry-run] [--list] [--only <lang>...]
 ```
 
 **Purpose:** Walk the repository root and ensure every Go, Python, and TypeScript file carries the correct path-comment header. Idempotent — safe to re-run and safe to wire into a pre-commit hook or CI check.
@@ -350,6 +373,7 @@ All paths are relative to the resolved repo root (same root resolution as `polic
 | Flag               | Description                                              |
 | ------------------ | -------------------------------------------------------- |
 | `--dry-run`        | Print what would change without writing any files        |
+| `--list`           | Print the repo-relative files that would be modified     |
 | `--only <lang>...` | Restrict to one or more of: `go`, `python`, `typescript` |
 
 **Skip list (never modified):**
@@ -374,6 +398,9 @@ Skipped : 44
 ```bash
 policycheck fmt headers --dry-run
 # exits 1 if any file would be modified — fail the pipeline
+
+policycheck fmt headers --dry-run --list
+# prints the exact repo-relative files that would be modified, then exits 1 if any are pending
 ```
 
 **Architecture placement:**
@@ -503,21 +530,25 @@ Bare passthrough emits a subtle indicator so it is never ambiguous whether the w
 
 ## 9. Acceptance Criteria (Wrapper MVP)
 
-- [ ] `policycheck uv add <pkg>` runs OSV pre-install purl scan; blocks on CRITICAL/HIGH
-- [ ] Post-install lockfile scan runs after successful install; same severity gate
-- [ ] `policycheck gofumpt -l ./... -then go test ./...` blocks test if formatter exits non-zero
-- [ ] `policycheck run <macro>` executes all steps in order; respects `on_failure` (`stop` / `continue`)
-- [ ] Global config loaded from XDG path (Linux/macOS) or `%APPDATA%` (Windows)
-- [ ] Repo config (`policy-gate.toml`) resolved by CWD walk; merged with global config
-- [ ] `policycheck config init` scaffolds a valid repo `policy-gate.toml`
-- [ ] All blocks emit a human-readable reason and the specific advisory/exit-code that caused it
+- [x] `policycheck uv add <pkg>` runs OSV pre-install purl scan; blocks on CRITICAL/HIGH
+- [x] Post-install lockfile scan runs after successful install; same severity gate
+- [x] `policycheck gofumpt -l ./... -then go test ./...` blocks test if formatter exits non-zero
+- [x] `policycheck run <macro>` executes all steps in order; respects `on_failure` (`stop` / `continue`)
+- [x] Global config loaded from XDG path (Linux/macOS) or `%APPDATA%` (Windows)
+- [x] Repo config (`policy-gate.toml`) resolved by CWD walk; merged with global config
+- [x] `policycheck config init` scaffolds a valid repo `policy-gate.toml`
+- [x] All blocks emit a human-readable reason and an explicit override or failure cause
 - [ ] `--dry-run` on `run` prints steps without executing
 - [ ] Non-TTY mode auto-blocks on MODERATE (no prompt); TTY prompts y/n
-- [ ] All child processes are terminated on failure before `policycheck` exits — no ghost processes under any code path
-- [ ] `policycheck fmt headers` injects correct path comments for Go, Python, and TypeScript files
-- [ ] `policycheck fmt headers --dry-run` exits 1 if any file would be modified (CI-safe)
-- [ ] Stale headers (path has changed) are corrected, not duplicated
-- [ ] Python files get shebang on line 1 and path comment on line 2; existing shebangs are preserved
+- [x] All child processes are terminated on failure before `policycheck` exits — no ghost processes under any code path
+- [x] `policycheck fmt headers` injects correct path comments for Go, Python, and TypeScript files
+- [x] `policycheck fmt headers --dry-run` exits 1 if any file would be modified (CI-safe)
+- [x] Stale headers (path has changed) are corrected, not duplicated
+- [x] Python files get shebang on line 1 and path comment on line 2; existing shebangs are preserved
+
+Acceptance criteria intentionally deferred by the reconciliation note:
+- Macro `--dry-run`
+- Interactive MODERATE-risk prompt handling
 
 ---
 
@@ -1372,4 +1403,3 @@ Require `osv-scanner` or `osv-scanner.exe` in PATH.
 | `TestIntegration_FmtHeaders_RealRepo_Idempotent` | after 9 | Headers written correctly; second run modifies zero files             |
 
 ---
-

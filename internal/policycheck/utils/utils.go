@@ -6,7 +6,6 @@ package utils
 import (
 	"go/ast"
 	"path"
-	"path/filepath"
 	"strings"
 )
 
@@ -19,12 +18,39 @@ var irregularPluralVerbs = map[string]string{
 
 // NormalizePolicyPath normalizes a policy path for comparison.
 func NormalizePolicyPath(value string) string {
-	cleaned := path.Clean(filepath.ToSlash(value))
+	normalized := strings.ReplaceAll(strings.TrimSpace(value), "\\", "/")
+	cleaned := path.Clean(normalized)
 	if cleaned == "." {
 		return ""
 	}
 
 	return strings.TrimPrefix(cleaned, "./")
+}
+
+// IsPolicyAbsPath returns true for both native absolute paths and Windows-style
+// absolute paths, even when the current host OS is not Windows.
+func IsPolicyAbsPath(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "/") {
+		return true
+	}
+	if strings.HasPrefix(trimmed, `\\`) || strings.HasPrefix(trimmed, "//") {
+		return true
+	}
+	if len(trimmed) < 3 {
+		return false
+	}
+	drive := trimmed[0]
+	if !((drive >= 'A' && drive <= 'Z') || (drive >= 'a' && drive <= 'z')) {
+		return false
+	}
+	if trimmed[1] != ':' {
+		return false
+	}
+	return trimmed[2] == '\\' || trimmed[2] == '/'
 }
 
 // HasPrefix returns true if the string starts with any of the provided prefixes,
@@ -46,16 +72,79 @@ func HasPrefix(value string, prefixes []string) bool {
 
 // ToSlashRel returns the slash-normalized path of target relative to root.
 func ToSlashRel(root, target string) string {
-	if !filepath.IsAbs(target) {
+	if !IsPolicyAbsPath(target) {
+		return NormalizePolicyPath(target)
+	}
+	if !IsPolicyAbsPath(root) {
 		return NormalizePolicyPath(target)
 	}
 
-	rel, err := filepath.Rel(root, target)
+	normalizedRoot := NormalizePolicyPath(root)
+	normalizedTarget := NormalizePolicyPath(target)
+
+	rootVolume, rootPath, rootHasVolume := splitPolicyVolume(normalizedRoot)
+	targetVolume, targetPath, targetHasVolume := splitPolicyVolume(normalizedTarget)
+	if rootHasVolume || targetHasVolume {
+		if !rootHasVolume || !targetHasVolume || !strings.EqualFold(rootVolume, targetVolume) {
+			return normalizedTarget
+		}
+		rel, err := relativePolicyPath(rootPath, targetPath)
+		if err != nil {
+			return normalizedTarget
+		}
+		return NormalizePolicyPath(rel)
+	}
+
+	rel, err := relativePolicyPath(normalizedRoot, normalizedTarget)
 	if err != nil {
-		return NormalizePolicyPath(target)
+		return normalizedTarget
 	}
 
 	return NormalizePolicyPath(rel)
+}
+
+// splitPolicyVolume extracts a Windows drive prefix from a normalized path.
+func splitPolicyVolume(value string) (string, string, bool) {
+	if len(value) < 3 {
+		return "", value, false
+	}
+	drive := value[0]
+	if !((drive >= 'A' && drive <= 'Z') || (drive >= 'a' && drive <= 'z')) || value[1] != ':' || value[2] != '/' {
+		return "", value, false
+	}
+	return strings.ToUpper(value[:2]), value[2:], true
+}
+
+// relativePolicyPath computes a slash-normalized relative path without relying
+// on host-specific filepath semantics.
+func relativePolicyPath(root, target string) (string, error) {
+	rootParts := splitPolicyPath(root)
+	targetParts := splitPolicyPath(target)
+
+	commonLength := 0
+	for commonLength < len(rootParts) && commonLength < len(targetParts) && rootParts[commonLength] == targetParts[commonLength] {
+		commonLength++
+	}
+
+	relativeParts := make([]string, 0, len(rootParts)-commonLength+len(targetParts)-commonLength)
+	for idx := commonLength; idx < len(rootParts); idx++ {
+		relativeParts = append(relativeParts, "..")
+	}
+	relativeParts = append(relativeParts, targetParts[commonLength:]...)
+	if len(relativeParts) == 0 {
+		return ".", nil
+	}
+
+	return strings.Join(relativeParts, "/"), nil
+}
+
+// splitPolicyPath splits a normalized slash path into clean path components.
+func splitPolicyPath(value string) []string {
+	trimmed := strings.Trim(path.Clean(value), "/")
+	if trimmed == "" {
+		return nil
+	}
+	return strings.Split(trimmed, "/")
 }
 
 // Pluralize returns the singular or plural form of a noun based on count.

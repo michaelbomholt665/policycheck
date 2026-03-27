@@ -6,12 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"policycheck/internal/adapters/cliwrapper"
-	"policycheck/internal/adapters/cliwrappercore"
 	"policycheck/internal/adapters/config"
-	"policycheck/internal/adapters/readfile"
-	"policycheck/internal/adapters/scanners"
-	"policycheck/internal/adapters/walk"
 	"policycheck/internal/router"
 )
 
@@ -19,11 +14,6 @@ import (
 // It may be empty when the host application has no required adapters to boot here.
 var extensions = []router.Extension{
 	&config.Extension{},
-	&walk.Extension{},
-	&scanners.Extension{},
-	&cliwrappercore.Extension{},
-	&cliwrapper.Extension{},
-	&readfile.Extension{},
 }
 
 const (

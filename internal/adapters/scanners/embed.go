@@ -1,3 +1,4 @@
+// internal/adapters/scanners/embed.go
 package scanners
 
 import _ "embed"

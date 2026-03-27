@@ -1,5 +1,5 @@
-{"file":"internal/router/ext/app_manifest.go","checksum":"5c906adca417994241434ad41a79cd3f6b67cf01eb8a45dba951441e5b6455d1"}
-{"file":"internal/router/ext/extensions.go","checksum":"7ae112bcf1d251ddc96c0dd18a0f3e8f16870e00daa9432d2c7a7a1da37be5cb"}
+{"file":"internal/router/ext/app_manifest.go","checksum":"ce6a4402a5101aedca09e72c451ff78ad1da2570b318971d03d7b06273ea55f7"}
+{"file":"internal/router/ext/extensions.go","checksum":"78e8ad0b9be54bac42d39ed50713112a08078286e1ef5267ea4ad80f520e798d"}
 {"file":"internal/router/ext/optional_extensions.go","checksum":"02dfd7f1d6fe56798c5cf47955f7af863bc2c9eb9af10252ef47944e1f65980c"}
 {"file":"internal/router/extension.go","checksum":"c14f66bb39a4b56867a358f77fe83d1b2997cc140d1a612a3b511066a28b0d01"}
 {"file":"internal/router/ports.go","checksum":"2f87775199de0c729887eeae9dc7d516a9848c5d4f9e7c56323119397dd543e2"}

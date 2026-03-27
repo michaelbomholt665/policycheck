@@ -1,3 +1,7 @@
+// internal/router/tools/wrlk/lock.go
+// Implements the file tracking, snapshotting, and restoration mechanics
+// to protect the router core from unplanned drift.
+
 package main
 
 import (
@@ -21,6 +25,12 @@ const (
 var trackedRouterFiles = []string{
 	"internal/router/extension.go",
 	"internal/router/registry.go",
+	"internal/router/ports.go",
+	"internal/router/registry_imports.go",
+	"internal/router/router_manifest.go",
+	"internal/router/ext/app_manifest.go",
+	"internal/router/ext/optional_extensions.go",
+	"internal/router/ext/extensions.go",
 }
 
 var snapshotRouterFiles = []string{
@@ -28,6 +38,10 @@ var snapshotRouterFiles = []string{
 	"internal/router/registry.go",
 	"internal/router/ports.go",
 	"internal/router/registry_imports.go",
+	"internal/router/router_manifest.go",
+	"internal/router/ext/app_manifest.go",
+	"internal/router/ext/optional_extensions.go",
+	"internal/router/ext/extensions.go",
 	routerLockRelativePath,
 }
 
@@ -328,13 +342,13 @@ func RouterWriteTempLockFile(file *os.File, payload []byte) error {
 	return nil
 }
 
-type routerFileSnapshot struct {
-	CreatedAt string               `json:"created_at"`
-	Reason    string               `json:"reason"`
-	Files     []routerSnapshotFile `json:"files"`
+type routerMutationSnapshot struct {
+	CreatedAt string                       `json:"created_at"`
+	Reason    string                       `json:"reason"`
+	Files     []routerMutationSnapshotFile `json:"files"`
 }
 
-type routerSnapshotFile struct {
+type routerMutationSnapshotFile struct {
 	File     string `json:"file"`
 	Exists   bool   `json:"exists"`
 	Checksum string `json:"checksum,omitempty"`
@@ -342,7 +356,7 @@ type routerSnapshotFile struct {
 }
 
 // RouterWriteSnapshot writes a restorable router snapshot to disk.
-func RouterWriteSnapshot(root string, snapshot routerFileSnapshot) error {
+func RouterWriteSnapshot(root string, snapshot routerMutationSnapshot) error {
 	snapshotPath := filepath.Join(root, filepath.FromSlash(routerSnapshotRelativePath))
 	if err := os.MkdirAll(filepath.Dir(snapshotPath), 0o755); err != nil {
 		return fmt.Errorf("create snapshot directory for %s: %w", snapshotPath, err)
@@ -362,27 +376,27 @@ func RouterWriteSnapshot(root string, snapshot routerFileSnapshot) error {
 }
 
 // RouterLoadSnapshot loads the most recent router snapshot from disk.
-func RouterLoadSnapshot(root string) (routerFileSnapshot, error) {
+func RouterLoadSnapshot(root string) (routerMutationSnapshot, error) {
 	snapshotPath := filepath.Join(root, filepath.FromSlash(routerSnapshotRelativePath))
 	content, err := os.ReadFile(snapshotPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return routerFileSnapshot{}, fmt.Errorf("router snapshot restore failed: missing %s", routerSnapshotRelativePath)
+			return routerMutationSnapshot{}, fmt.Errorf("router snapshot restore failed: missing %s", routerSnapshotRelativePath)
 		}
 
-		return routerFileSnapshot{}, fmt.Errorf("open router snapshot %s: %w", snapshotPath, err)
+		return routerMutationSnapshot{}, fmt.Errorf("open router snapshot %s: %w", snapshotPath, err)
 	}
 
-	var snapshot routerFileSnapshot
+	var snapshot routerMutationSnapshot
 	if err := json.Unmarshal(content, &snapshot); err != nil {
-		return routerFileSnapshot{}, fmt.Errorf(
+		return routerMutationSnapshot{}, fmt.Errorf(
 			"router snapshot restore failed: corrupt %s: %w",
 			routerSnapshotRelativePath,
 			err,
 		)
 	}
 	if len(snapshot.Files) == 0 {
-		return routerFileSnapshot{}, fmt.Errorf(
+		return routerMutationSnapshot{}, fmt.Errorf(
 			"router snapshot restore failed: corrupt %s",
 			routerSnapshotRelativePath,
 		)
@@ -392,22 +406,22 @@ func RouterLoadSnapshot(root string) (routerFileSnapshot, error) {
 }
 
 // RouterCaptureSnapshot records the current router file state before mutation.
-func RouterCaptureSnapshot(root string, reason string) (routerFileSnapshot, error) {
-	files := make([]routerSnapshotFile, 0, len(snapshotRouterFiles))
+func RouterCaptureSnapshot(root string, reason string) (routerMutationSnapshot, error) {
+	files := make([]routerMutationSnapshotFile, 0, len(snapshotRouterFiles))
 	for _, relativePath := range snapshotRouterFiles {
 		absolutePath := filepath.Join(root, filepath.FromSlash(relativePath))
 		content, err := os.ReadFile(absolutePath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				files = append(files, routerSnapshotFile{File: relativePath, Exists: false})
+				files = append(files, routerMutationSnapshotFile{File: relativePath, Exists: false})
 				continue
 			}
 
-			return routerFileSnapshot{}, fmt.Errorf("read router snapshot file %s: %w", relativePath, err)
+			return routerMutationSnapshot{}, fmt.Errorf("read router snapshot file %s: %w", relativePath, err)
 		}
 
 		sum := sha256.Sum256(content)
-		files = append(files, routerSnapshotFile{
+		files = append(files, routerMutationSnapshotFile{
 			File:     relativePath,
 			Exists:   true,
 			Checksum: hex.EncodeToString(sum[:]),
@@ -419,7 +433,7 @@ func RouterCaptureSnapshot(root string, reason string) (routerFileSnapshot, erro
 		return files[i].File < files[j].File
 	})
 
-	return routerFileSnapshot{
+	return routerMutationSnapshot{
 		CreatedAt: RouterSnapshotTimestamp(),
 		Reason:    reason,
 		Files:     files,
@@ -441,7 +455,7 @@ func RouterWriteSnapshotBeforeMutation(root string, reason string) error {
 }
 
 // RouterRestoreSnapshot restores tracked router files from a prior snapshot.
-func RouterRestoreSnapshot(root string, snapshot routerFileSnapshot) error {
+func RouterRestoreSnapshot(root string, snapshot routerMutationSnapshot) error {
 	for _, file := range snapshot.Files {
 		absolutePath := filepath.Join(root, filepath.FromSlash(file.File))
 		if !file.Exists {

@@ -12,13 +12,13 @@ Finish convergence and hardening work so the implementation is structurally clea
 
 ## Task Checklist
 
-- [ ] Remove duplicated wrapper core definitions from adapter packages.
-- [ ] Make `internal/cliwrapper` the single authoritative wrapper core.
-- [ ] Align remaining user-facing output with the design doc.
-- [ ] Decide and document any intentionally reduced scope.
-- [ ] Add structural tests or policy checks for shared entrypoint isolation.
-- [ ] Add structural tests or policy checks for config filename stability.
-- [ ] Reconcile the final implementation with the design doc.
+- [x] Remove duplicated wrapper core definitions from adapter packages.
+- [x] Make `internal/cliwrapper` the single authoritative wrapper core.
+- [x] Align remaining user-facing output with the design doc.
+- [x] Decide and document any intentionally reduced scope.
+- [x] Add structural tests or policy checks for shared entrypoint isolation.
+- [x] Add structural tests or policy checks for config filename stability.
+- [x] Reconcile the final implementation with the design doc.
 
 ## Why This Phase Exists
 
@@ -48,58 +48,60 @@ Even after the feature surface is completed, the implementation should converge 
 
 ## TDD Cycles
 
-### T1 Core Convergence [ ]
+### T1 Core Convergence [x]
 
 Summary: remove duplicate wrapper-core types and logic so the package layout matches the documented architecture.
 
 RED:
-- [ ] Write a failing test or structural check that catches duplicated core definitions and adapter-local shadow types.
-- [ ] Write a failing integration test proving adapters use the shared core package behaviour.
+- [x] Write a failing test or structural check that catches duplicated core definitions and adapter-local shadow types.
+- [x] Write a failing integration test proving adapters use the shared core package behaviour.
 
 GREEN:
-- [ ] Delete or collapse duplicated logic in `internal/adapters/cliwrapper/core.go`.
-- [ ] Update adapters to depend on `internal/cliwrapper` as the only core wrapper package.
+- [x] Delete duplicated adapter-local header formatter helpers and repo-root resolution logic.
+- [x] Delete or collapse duplicated logic in `internal/adapters/cliwrapper/core.go`.
+- [x] Update adapters to depend on `internal/cliwrapper` as the only core wrapper package.
 
 REFACTOR:
-- [ ] Normalize names and comments so ownership is obvious at a glance.
+- [x] Normalize names and comments so ownership is obvious at a glance.
 
 Acceptance checks:
 - There is one authoritative wrapper core.
 - Adapters no longer shadow core behaviour.
 
-### T2 Output and Interaction Design Alignment [ ]
+### T2 Output and Interaction Design Alignment [x]
 
 Summary: implement or explicitly scope down any remaining user-facing behaviour from the design doc.
 
 RED:
-- [ ] Add a focused failing test for clearer block reason output.
-- [ ] Add a focused failing test for consistent dry-run output.
-- [ ] Add a focused failing test for optional prompt handling for moderate-risk flows if still in scope.
+- [x] Add a focused failing test for clearer block reason output.
+- [x] Add a focused failing test for consistent dry-run output.
+- [x] Add a focused failing test for optional prompt handling for moderate-risk flows if still in scope.
+  Not in scope for this phase; deferred explicitly in the reconciled design doc.
 
 GREEN:
-- [ ] Implement the missing output/interaction seams or update the design doc where scope was intentionally reduced.
+- [x] Implement the missing output/interaction seams or update the design doc where scope was intentionally reduced.
 
 REFACTOR:
-- [ ] Keep rendering concerns out of low-level parser and adapter logic.
+- [x] Keep rendering concerns out of low-level parser and adapter logic.
 
 Acceptance checks:
 - Final user-visible behaviour is coherent and documented.
 
-### T3 Architecture Lock-In [ ]
+### T3 Architecture Lock-In [x]
 
 Summary: protect the final shape with narrow, durable verification instead of broad brittle suites.
 
 RED:
-- [ ] Add a failing test or policy check for shared entrypoint isolation in `internal/app`.
-- [ ] Add a failing test or policy check for no direct adapter-to-adapter imports.
-- [ ] Add a failing test or policy check for wrapper surface reachability from the binary.
-- [ ] Add a failing test or policy check for repo config filename stability.
+- [x] Add a failing test or policy check for shared entrypoint isolation in `internal/app`.
+- [x] Add a failing test or policy check for no direct adapter-to-adapter imports.
+- [x] Add a failing test or policy check for wrapper surface reachability from the binary.
+- [x] Add a failing test or policy check for repo config filename stability.
 
 GREEN:
-- [ ] Implement any remaining cleanup exposed by those checks.
+- [x] Implement any remaining cleanup exposed by those checks.
 
 REFACTOR:
-- [ ] Prefer structural tests and policy checks over giant end-to-end scripts.
+- [x] Prefer structural tests and policy checks over giant end-to-end scripts.
 
 Acceptance checks:
 - The app is safe to link from the router repo without architectural embarrassment.

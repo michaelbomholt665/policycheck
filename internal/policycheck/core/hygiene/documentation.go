@@ -473,7 +473,7 @@ func verifyGoFunctionStyle(p goStyleParams) []types.Violation {
 	summary := firstNonEmptyLine(docText)
 
 	if p.docCtx.cfg.Documentation.GoStyle == "google" && !strings.HasPrefix(summary, name) {
-		viols = append(viols, newDocumentationViolation(
+		return []types.Violation{newDocumentationViolation(
 			p.fset.Position(p.fn.Doc.Pos()).Line,
 			documentationViolationSpec{
 				subject:      fmt.Sprintf("%s %q violates documentation style", functionSubject(p.fn), name),
@@ -481,7 +481,7 @@ func verifyGoFunctionStyle(p goStyleParams) []types.Violation {
 				functionName: name,
 			},
 			p.docCtx,
-		))
+		)}
 	}
 
 	if floorReason := validateSummaryQuality(summary, name, true); floorReason != "" {

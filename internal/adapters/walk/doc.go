@@ -1,3 +1,5 @@
+// internal/adapters/walk/doc.go
+//
 // Package walk Provides the router-backed directory traversal adapter.
 //
 // Package Concerns:

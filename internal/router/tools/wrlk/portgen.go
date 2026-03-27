@@ -1,3 +1,5 @@
+// internal/router/tools/wrlk/portgen.go
+//
 // Package main implements the portgen CLI for the Port Router.
 //
 // Package Concerns:
@@ -30,7 +32,7 @@ const (
 )
 
 // RouterRunPortgenCommand executes the portgen CLI as a wrlk subcommand.
-func RouterRunPortgenCommand(options globalOptions, args []string, stdout io.Writer, stderr io.Writer) error {
+func RouterRunPortgenCommand(options globalOptions, args []string, stdout io.Writer, _ io.Writer) error {
 	if len(args) > 0 && RouterIsHelpToken(args[0]) {
 		return RouterWritePortgenUsage(stdout)
 	}
@@ -140,13 +142,13 @@ func RouterBuildPortgenMutation(root, name, value string) (portgenMutation, erro
 	portsPath := filepath.Join(root, filepath.FromSlash(portsRelPath))
 	validationPath := filepath.Join(root, filepath.FromSlash(validationRelPath))
 
-	portsContent, validationContent, err := RouterReadManagedPortFiles(portsPath, validationPath)
-	if err != nil {
-		return portgenMutation{}, fmt.Errorf("read managed router files: %w", err)
+	portsContent, validationContent, readErr := RouterReadManagedPortFiles(portsPath, validationPath)
+	if readErr != nil {
+		return portgenMutation{}, fmt.Errorf("read managed router files: %w", readErr)
 	}
 
-	if err := RouterVerifyManagedPortFiles(portsContent, validationContent); err != nil {
-		return portgenMutation{}, fmt.Errorf("preflight managed router files: %w", err)
+	if verifyErr := RouterVerifyManagedPortFiles(portsContent, validationContent); verifyErr != nil {
+		return portgenMutation{}, fmt.Errorf("preflight managed router files: %w", verifyErr)
 	}
 
 	updatedPorts, updatedValidation, err := RouterBuildUpdatedManagedPortFiles(portsContent, validationContent, name, value)
@@ -225,7 +227,7 @@ func RouterInjectPortConstant(content []byte, name, value string) ([]byte, error
 	constBlock.Specs = append(constBlock.Specs, &ast.ValueSpec{
 		Doc: &ast.CommentGroup{
 			List: []*ast.Comment{{
-				Text: fmt.Sprintf("// %s is the %s provider port.", name, value),
+				Text: fmt.Sprintf("// %s declares the %q provider port.", name, value),
 			}},
 		},
 		Names: []*ast.Ident{ast.NewIdent(name)},
@@ -246,7 +248,7 @@ func RouterInjectValidationCase(content []byte, name string) ([]byte, error) {
 		return nil, fmt.Errorf("parse validation file: %w", err)
 	}
 
-	trueClause, _, err := RouterFindValidationSwitchClauses(file)
+	trueClause, err := RouterFindValidationSwitchClauses(file)
 	if err != nil {
 		return nil, err
 	}
@@ -420,7 +422,7 @@ func RouterAllowedPortNames(content []byte) ([]string, error) {
 		return nil, fmt.Errorf("parse validation file: %w", err)
 	}
 
-	trueClause, _, err := RouterFindValidationSwitchClauses(file)
+	trueClause, err := RouterFindValidationSwitchClauses(file)
 	if err != nil {
 		return nil, err
 	}
@@ -458,7 +460,7 @@ func RouterFindPortConstBlock(file *ast.File) (*ast.GenDecl, error) {
 }
 
 // RouterFindValidationSwitchClauses returns the managed allow/default clauses.
-func RouterFindValidationSwitchClauses(file *ast.File) (*ast.CaseClause, *ast.CaseClause, error) {
+func RouterFindValidationSwitchClauses(file *ast.File) (*ast.CaseClause, error) {
 	for _, decl := range file.Decls {
 		funcDecl := RouterValidationFuncDecl(decl)
 		if funcDecl == nil {
@@ -466,13 +468,13 @@ func RouterFindValidationSwitchClauses(file *ast.File) (*ast.CaseClause, *ast.Ca
 		}
 		switchStmt, err := RouterValidationSwitchStmt(funcDecl)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
-		return RouterExtractValidationCaseClauses(switchStmt)
+		return RouterExtractValidationAllowClause(switchStmt)
 	}
 
-	return nil, nil, fmt.Errorf("could not locate RouterValidatePortName in %s", validationRelPath)
+	return nil, fmt.Errorf("could not locate RouterValidatePortName in %s", validationRelPath)
 }
 
 // RouterValidationFuncDecl returns RouterValidatePortName when decl matches the expected function.
@@ -517,15 +519,15 @@ func RouterValidateValidationSwitchTag(tag ast.Expr) error {
 	return nil
 }
 
-// RouterExtractValidationCaseClauses extracts the managed allow/default validation cases.
-func RouterExtractValidationCaseClauses(switchStmt *ast.SwitchStmt) (*ast.CaseClause, *ast.CaseClause, error) {
+// RouterExtractValidationAllowClause extracts the managed allow validation case.
+func RouterExtractValidationAllowClause(switchStmt *ast.SwitchStmt) (*ast.CaseClause, error) {
 	var trueClause *ast.CaseClause
 	var defaultClause *ast.CaseClause
 
 	for _, stmt := range switchStmt.Body.List {
 		caseClause, err := RouterRequireCaseClause(stmt)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		updatedTrueClause, updatedDefaultClause, err := RouterAssignValidationCaseClause(
@@ -534,7 +536,7 @@ func RouterExtractValidationCaseClauses(switchStmt *ast.SwitchStmt) (*ast.CaseCl
 			defaultClause,
 		)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		trueClause = updatedTrueClause
@@ -542,10 +544,10 @@ func RouterExtractValidationCaseClauses(switchStmt *ast.SwitchStmt) (*ast.CaseCl
 	}
 
 	if trueClause == nil || defaultClause == nil {
-		return nil, nil, fmt.Errorf("unsupported RouterValidatePortName cases in %s", validationRelPath)
+		return nil, fmt.Errorf("unsupported RouterValidatePortName cases in %s", validationRelPath)
 	}
 
-	return trueClause, defaultClause, nil
+	return trueClause, nil
 }
 
 // RouterRequireCaseClause asserts that stmt is a case clause in RouterValidatePortName.

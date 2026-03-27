@@ -1,3 +1,7 @@
+// internal/router/tools/wrlk/guide_current.go
+// Implements the CLI guide generation to describe the currently wired
+// router capabilities and application extensions over the console.
+
 package main
 
 import (
@@ -284,8 +288,11 @@ func RouterReadGuideDocMetadata(root, packageRel string) (string, []string, erro
 // RouterExtractGuideDocSections extracts a summary and usage block from package doc text.
 func RouterExtractGuideDocSections(docText string) (string, []string) {
 	lines := strings.Split(docText, "\n")
+	return RouterExtractGuideSummary(lines), RouterExtractGuideUsage(lines)
+}
 
-	summary := ""
+// RouterExtractGuideSummary collects the opening package summary before section headers.
+func RouterExtractGuideSummary(lines []string) string {
 	summaryParts := make([]string, 0)
 	summaryStarted := false
 	for _, rawLine := range lines {
@@ -304,8 +311,11 @@ func RouterExtractGuideDocSections(docText string) (string, []string) {
 		summaryStarted = true
 		summaryParts = append(summaryParts, line)
 	}
-	summary = strings.Join(summaryParts, " ")
+	return strings.Join(summaryParts, " ")
+}
 
+// RouterExtractGuideUsage collects bullet-style usage guidance from the Usage section.
+func RouterExtractGuideUsage(lines []string) []string {
 	usage := make([]string, 0)
 	inUsage := false
 	currentUsage := ""
@@ -313,7 +323,6 @@ func RouterExtractGuideDocSections(docText string) (string, []string) {
 		line := strings.TrimSpace(rawLine)
 		if line == "Usage:" {
 			inUsage = true
-			currentUsage = ""
 			continue
 		}
 
@@ -321,25 +330,17 @@ func RouterExtractGuideDocSections(docText string) (string, []string) {
 			continue
 		}
 
-		if line == "" {
-			if currentUsage != "" {
-				usage = append(usage, currentUsage)
-				currentUsage = ""
+		if line == "" || RouterGuideUsageReachedNextSection(line) {
+			usage = RouterAppendGuideUsageLine(usage, currentUsage)
+			currentUsage = ""
+			if RouterGuideUsageReachedNextSection(line) {
+				break
 			}
 			continue
 		}
 
-		if strings.HasSuffix(line, ":") && !strings.HasPrefix(line, "- ") {
-			if currentUsage != "" {
-				usage = append(usage, currentUsage)
-			}
-			break
-		}
-
 		if strings.HasPrefix(line, "- ") {
-			if currentUsage != "" {
-				usage = append(usage, currentUsage)
-			}
+			usage = RouterAppendGuideUsageLine(usage, currentUsage)
 			currentUsage = strings.TrimPrefix(line, "- ")
 			continue
 		}
@@ -352,11 +353,21 @@ func RouterExtractGuideDocSections(docText string) (string, []string) {
 		currentUsage = currentUsage + " " + line
 	}
 
-	if currentUsage != "" {
-		usage = append(usage, currentUsage)
+	return RouterAppendGuideUsageLine(usage, currentUsage)
+}
+
+// RouterGuideUsageReachedNextSection reports whether parsing has reached a new doc section.
+func RouterGuideUsageReachedNextSection(line string) bool {
+	return strings.HasSuffix(line, ":") && !strings.HasPrefix(line, "- ")
+}
+
+// RouterAppendGuideUsageLine appends a completed usage item when one is present.
+func RouterAppendGuideUsageLine(usage []string, currentUsage string) []string {
+	if currentUsage == "" {
+		return usage
 	}
 
-	return summary, usage
+	return append(usage, currentUsage)
 }
 
 // RouterReadGuideExtensionMethods parses Required, Consumes, and Provides from extension.go.
@@ -383,31 +394,55 @@ func RouterReadGuideExtensionMethods(root, packageRel string) (bool, []string, [
 			continue
 		}
 
-		switch funcDecl.Name.Name {
-		case "Required":
-			parsedRequired, err := RouterParseGuideRequiredValue(funcDecl)
-			if err != nil {
-				return false, nil, nil, err
-			}
-			required = parsedRequired
-		case "Consumes":
-			ports, err := RouterParseGuidePortList(funcDecl)
-			if err != nil {
-				return false, nil, nil, err
-			}
-			consumes = ports
-		case "Provides":
-			ports, err := RouterParseGuidePortList(funcDecl)
-			if err != nil {
-				return false, nil, nil, err
-			}
-			provides = ports
+		nextRequired, nextConsumes, nextProvides, err := RouterApplyGuideExtensionMethod(
+			required,
+			consumes,
+			provides,
+			funcDecl,
+		)
+		if err != nil {
+			return false, nil, nil, err
 		}
+
+		required = nextRequired
+		consumes = nextConsumes
+		provides = nextProvides
 	}
 
 	slices.Sort(consumes)
 	slices.Sort(provides)
 	return required, consumes, provides, nil
+}
+
+// RouterApplyGuideExtensionMethod applies one extension method declaration to the guide state.
+func RouterApplyGuideExtensionMethod(
+	required bool,
+	consumes []string,
+	provides []string,
+	funcDecl *ast.FuncDecl,
+) (bool, []string, []string, error) {
+	switch funcDecl.Name.Name {
+	case "Required":
+		parsedRequired, err := RouterParseGuideRequiredValue(funcDecl)
+		if err != nil {
+			return false, nil, nil, err
+		}
+		return parsedRequired, consumes, provides, nil
+	case "Consumes":
+		ports, err := RouterParseGuidePortList(funcDecl)
+		if err != nil {
+			return false, nil, nil, err
+		}
+		return required, ports, provides, nil
+	case "Provides":
+		ports, err := RouterParseGuidePortList(funcDecl)
+		if err != nil {
+			return false, nil, nil, err
+		}
+		return required, consumes, ports, nil
+	default:
+		return required, consumes, provides, nil
+	}
 }
 
 // RouterParseGuideRequiredValue returns the bool literal returned by Required().

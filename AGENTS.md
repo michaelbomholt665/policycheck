@@ -18,10 +18,11 @@ Read these before making changes:
 
 ## Router Rules
 
-- If you edit `internal/router/ports.go`, `internal/router/registry_imports.go`, or `internal/router/ext/*`, read `docs/router/usage.md` first.
+- Treat the router as manifest-backed. Do not hand-edit generated router wiring unless explicitly required.
+- Use `go run ./internal/router/tools/wrlk register ...` as the default router mutation path. Do not use legacy `wrlk add` or `wrlk ext add` flows.
+- Router reference guide: `docs/documentation/router_guide.md`.
+- GPT Codex Agent should not read `docs/documentation/router_guide.md` by default. Only read it if the user explicitly asks for that document to be consulted.
 - Do not manually edit `internal/router/extension.go` or `internal/router/registry.go` unless explicitly asked.
-- Use `go run ./internal/router/tools/wrlk add --name <PortName> --value <string>` to add router ports.
-- DO NOT USE `go run ./internal/router/tools/wrlk ext add --name <ExtensionName>`.
 - Before finishing router-related changes, run `go run ./internal/router/tools/wrlk --help`.
 - If router lock or scaffold output does not match the current file shape, stop and report drift instead of forcing edits.
 
@@ -29,9 +30,7 @@ Read these before making changes:
 
 - Treat the router as complete infrastructure unless the task explicitly targets router internals.
 - For policycheck work, use the router-backed host capabilities for config, walk, and scanner access instead of introducing parallel bootstrapping or direct wiring paths.
-- `WRLK EXT ADD` IS NOT TO BE USED FOR THIS REWRITE.
 - Adapters must not import each other to reach another capability. If one capability needs another, expose a port contract, register a provider, and resolve it through the router boundary.
-- Follow the import rule from `docs/router/usage.md`: consumer -> `internal/ports` + `internal/router`; host boot -> `internal/router/ext`; router wiring -> `internal/adapters/*`.
 - Tests should verify policycheck's use of resolved providers and host seams, not re-prove the router's internal implementation.
 - If new host capabilities are needed, keep changes in the mutable router wiring files and avoid redesigning frozen router contracts casually.
 

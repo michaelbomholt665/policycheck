@@ -7,27 +7,20 @@ type PortName string
 type Provider any
 
 const (
-	// PortPrimary is an example primary provider port.
-	PortPrimary PortName = "primary"
-	// PortSecondary is an example secondary provider port.
-	PortSecondary PortName = "secondary"
-	// PortTertiary is an example tertiary provider port.
-	PortTertiary PortName = "tertiary"
-	// PortOptional is an example optional provider port.
-	PortOptional PortName = "optional"
-	// PortCLIStyle is the router-native CLI styling capability port.
-	PortCLIStyle PortName = "cli-style"
-	// PortCLIChrome is the router-native CLI text/layout capability port.
-	PortCLIChrome PortName = "cli-chrome"
-	// PortCLIInteraction is the router-native CLI interaction capability port.
+	PortPrimary                PortName = "primary"
+	PortSecondary              PortName = "secondary"
+	PortTertiary               PortName = "tertiary"
+	PortOptional               PortName = "optional"
+	PortCLIStyle               PortName = "cli-style"
+	PortCLIChrome              PortName = "cli-chrome"
 	PortCLIInteraction         PortName = "cli-interaction"
 	PortConfig                 PortName = "config"
 	PortWalk                   PortName = "walk"
 	PortScanner                PortName = "scanner"
 	PortReadFile               PortName = "readfile"
+	PortCLIWrapperCore         PortName = "cli-wrapper-core"
 	PortCLIWrapperDispatcher   PortName = "cli-wrapper-dispatcher"
 	PortCLIWrapperSecurityGate PortName = "cli-wrapper-security"
 	PortCLIWrapperMacroRunner  PortName = "cli-wrapper-macro"
 	PortCLIWrapperFormatter    PortName = "cli-wrapper-format"
-	PortCLIWrapperCore         PortName = "cli-wrapper-core"
 )

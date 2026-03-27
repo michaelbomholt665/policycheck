@@ -1,3 +1,7 @@
+// internal/router/ext/extensions/prettystyle/provider.go
+// Implements the capabilities.Provider interface for rendering styled CLI text,
+// structured tables, and semantic layouts.
+
 package prettystyle
 
 import (
@@ -5,10 +9,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"policycheck/internal/router/capabilities"
-
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
+	"policycheck/internal/router/capabilities"
 )
 
 const layoutSplitGap = "    "
@@ -79,6 +82,7 @@ func (p *Provider) StyleTable(kind string, headers []string, rows [][]string) (s
 	return tableWriter.Render(), nil
 }
 
+// mapTableRow applies column-selective styling across a single table row.
 func (p *Provider) mapTableRow(kind string, rowIndex int, row []string, headerWidth int) (table.Row, error) {
 	if len(row) != headerWidth {
 		return nil, fmt.Errorf(
@@ -120,6 +124,7 @@ func (p *Provider) StyleLayout(kind string, title string, content ...string) (st
 	}
 }
 
+// applyTableKind configures the table layout styles and separated rows boundary.
 func (p *Provider) applyTableKind(tableWriter table.Writer, kind string, columnCount int) {
 	style := table.StyleRounded
 	separateRows := true
@@ -152,6 +157,7 @@ func (p *Provider) applyTableKind(tableWriter table.Writer, kind string, columnC
 	}
 }
 
+// renderPanelLayout renders a framed container with an optional title.
 func (p *Provider) renderPanelLayout(title string, content []string) string {
 	lines := p.layoutLines(content)
 	width := utf8.RuneCountInString(title)
@@ -180,6 +186,7 @@ func (p *Provider) renderPanelLayout(title string, content []string) string {
 	return strings.Join(body, "\n")
 }
 
+// renderSplitLayout interleaves content blocks horizontally.
 func (p *Provider) renderSplitLayout(content []string) string {
 	linesByBlock := make([][]string, 0, len(content))
 	widths := make([]int, 0, len(content))
@@ -219,6 +226,7 @@ func (p *Provider) renderSplitLayout(content []string) string {
 	return strings.Join(rendered, "\n")
 }
 
+// renderGutterLayout aligns content against a fixed-width left margin label.
 func (p *Provider) renderGutterLayout(title string, content []string) string {
 	lines := p.layoutLines(content)
 	gutter := fmt.Sprintf("%-9.9s", title)
@@ -234,6 +242,7 @@ func (p *Provider) renderGutterLayout(title string, content []string) string {
 	return strings.Join(rendered, "\n")
 }
 
+// layoutLines decomposes string content into distinct visual lines for layout processing.
 func (p *Provider) layoutLines(content []string) []string {
 	if len(content) == 0 {
 		return []string{""}

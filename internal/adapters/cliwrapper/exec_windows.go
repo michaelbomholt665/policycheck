@@ -1,5 +1,6 @@
 //go:build windows
 
+// internal/adapters/cliwrapper/exec_windows.go
 package cliwrapper
 
 import (

@@ -41,12 +41,14 @@ func (s *stubMacroRunner) RunMacro(_ context.Context, name string) error {
 
 type stubFormatter struct {
 	dryRun bool
+	list   bool
 	only   []string
 	err    error
 }
 
-func (s *stubFormatter) FormatHeaders(_ context.Context, dryRun bool, only []string) error {
+func (s *stubFormatter) FormatHeaders(_ context.Context, dryRun bool, list bool, only []string) error {
 	s.dryRun = dryRun
+	s.list = list
 	s.only = append([]string(nil), only...)
 	return s.err
 }
@@ -76,7 +78,7 @@ func TestDispatcher_PackageGate_Allowed(t *testing.T) {
 	rec := &execRecorder{}
 
 	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
-		cliwrapperadapter.WrapperConfig{},
+		ports.WrapperConfig{},
 		rec.exec,
 		cliwrapperadapter.WrapperResolvers{
 			Core:         stubCoreResolver(),
@@ -95,15 +97,15 @@ func TestDispatcher_PackageGate_Allowed(t *testing.T) {
 func TestDispatcher_PackageGate_Blocked(t *testing.T) {
 	t.Parallel()
 
-	blockErr := &cliwrapperadapter.RiskBlockError{
-		Severity: cliwrapperadapter.SeverityCritical,
+	blockErr := &ports.RiskBlockError{
+		Severity: ports.SeverityCritical,
 		Reason:   "critical vulnerability in lodash",
 	}
 	gate := &stubSecurityGate{packageErr: blockErr}
 	rec := &execRecorder{}
 
 	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
-		cliwrapperadapter.WrapperConfig{},
+		ports.WrapperConfig{},
 		rec.exec,
 		cliwrapperadapter.WrapperResolvers{
 			Core:         stubCoreResolver(),
@@ -117,19 +119,45 @@ func TestDispatcher_PackageGate_Blocked(t *testing.T) {
 	assert.Empty(t, rec.calls, "exec must not be called when gate blocks")
 }
 
+func TestDispatcher_PackageGate_BlockMessageIncludesReasonAndOverrideHint(t *testing.T) {
+	t.Parallel()
+
+	blockErr := &ports.RiskBlockError{
+		Severity: ports.SeverityCritical,
+		Reason:   "critical vulnerability in lodash",
+	}
+	gate := &stubSecurityGate{packageErr: blockErr}
+	rec := &execRecorder{}
+
+	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
+		ports.WrapperConfig{},
+		rec.exec,
+		cliwrapperadapter.WrapperResolvers{
+			Core:         stubCoreResolver(),
+			SecurityGate: func() (ports.CLIWrapperSecurityGate, error) { return gate, nil },
+		},
+	)
+	err := d.Dispatch(context.Background(), []string{"npm", "install", "lodash"})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "critical vulnerability in lodash")
+	assert.Contains(t, err.Error(), "--allow-risk=critical")
+	assert.Empty(t, rec.calls)
+}
+
 func TestDispatcher_PackageGate_AllowRiskOverridesMatchingSeverity(t *testing.T) {
 	t.Parallel()
 
 	gate := &stubSecurityGate{
-		packageErr: &cliwrapperadapter.RiskBlockError{
-			Severity: cliwrapperadapter.SeverityHigh,
+		packageErr: &ports.RiskBlockError{
+			Severity: ports.SeverityHigh,
 			Reason:   "high vulnerability in lodash",
 		},
 	}
 	rec := &execRecorder{}
 
 	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
-		cliwrapperadapter.WrapperConfig{},
+		ports.WrapperConfig{},
 		rec.exec,
 		cliwrapperadapter.WrapperResolvers{
 			Core:         stubCoreResolver(),
@@ -147,15 +175,15 @@ func TestDispatcher_PackageGate_AllowRiskTooLowStillBlocks(t *testing.T) {
 	t.Parallel()
 
 	gate := &stubSecurityGate{
-		packageErr: &cliwrapperadapter.RiskBlockError{
-			Severity: cliwrapperadapter.SeverityCritical,
+		packageErr: &ports.RiskBlockError{
+			Severity: ports.SeverityCritical,
 			Reason:   "critical vulnerability in lodash",
 		},
 	}
 	rec := &execRecorder{}
 
 	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
-		cliwrapperadapter.WrapperConfig{},
+		ports.WrapperConfig{},
 		rec.exec,
 		cliwrapperadapter.WrapperResolvers{
 			Core:         stubCoreResolver(),
@@ -174,15 +202,15 @@ func TestDispatcher_PackageGate_AllowRiskTooLowStillBlocks(t *testing.T) {
 func TestDispatcher_PackageGate_PostInstallBlocked(t *testing.T) {
 	t.Parallel()
 
-	blockErr := &cliwrapperadapter.RiskBlockError{
-		Severity: cliwrapperadapter.SeverityHigh,
+	blockErr := &ports.RiskBlockError{
+		Severity: ports.SeverityHigh,
 		Reason:   "transitive vulnerability in package-lock.json",
 	}
 	gate := &stubSecurityGate{lockfileErr: blockErr}
 	rec := &execRecorder{}
 
 	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
-		cliwrapperadapter.WrapperConfig{},
+		ports.WrapperConfig{},
 		rec.exec,
 		cliwrapperadapter.WrapperResolvers{
 			Core:         stubCoreResolver(),
@@ -205,7 +233,7 @@ func TestDispatcher_Passthrough(t *testing.T) {
 	rec := &execRecorder{}
 
 	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
-		cliwrapperadapter.WrapperConfig{},
+		ports.WrapperConfig{},
 		rec.exec,
 		cliwrapperadapter.WrapperResolvers{Core: stubCoreResolver()},
 	)
@@ -223,7 +251,7 @@ func TestDispatcher_ToolingChain(t *testing.T) {
 	rec := &execRecorder{}
 
 	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
-		cliwrapperadapter.WrapperConfig{},
+		ports.WrapperConfig{},
 		rec.exec,
 		cliwrapperadapter.WrapperResolvers{Core: stubCoreResolver()},
 	)
@@ -243,8 +271,8 @@ func TestDispatcher_MacroRun(t *testing.T) {
 	runner := &stubMacroRunner{}
 
 	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
-		cliwrapperadapter.WrapperConfig{
-			Macros: []cliwrapperadapter.WrapperMacroConfig{{Name: "ci"}},
+		ports.WrapperConfig{
+			Macros: []ports.WrapperMacroConfig{{Name: "ci"}},
 		},
 		nil,
 		cliwrapperadapter.WrapperResolvers{
@@ -266,7 +294,7 @@ func TestDispatcher_FormatHeaders(t *testing.T) {
 	formatter := &stubFormatter{}
 
 	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
-		cliwrapperadapter.WrapperConfig{},
+		ports.WrapperConfig{},
 		nil,
 		cliwrapperadapter.WrapperResolvers{
 			Core:      stubCoreResolver(),
@@ -280,7 +308,32 @@ func TestDispatcher_FormatHeaders(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, formatter.dryRun)
+	assert.False(t, formatter.list)
 	assert.Equal(t, []string{"go", "python"}, formatter.only)
+}
+
+func TestDispatcher_FormatHeaders_List(t *testing.T) {
+	t.Parallel()
+
+	formatter := &stubFormatter{}
+
+	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
+		ports.WrapperConfig{},
+		nil,
+		cliwrapperadapter.WrapperResolvers{
+			Core:      stubCoreResolver(),
+			Formatter: func() (ports.CLIWrapperFormatter, error) { return formatter, nil },
+		},
+	)
+	err := d.Dispatch(
+		context.Background(),
+		[]string{"fmt", "headers", "--dry-run", "--list", "--only", "go"},
+	)
+
+	require.NoError(t, err)
+	assert.True(t, formatter.dryRun)
+	assert.True(t, formatter.list)
+	assert.Equal(t, []string{"go"}, formatter.only)
 }
 
 // TestDispatcher_PolicycheckSeparation verifies that a raw policycheck call is
@@ -291,7 +344,7 @@ func TestDispatcher_PolicycheckSeparation(t *testing.T) {
 	rec := &execRecorder{}
 
 	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
-		cliwrapperadapter.WrapperConfig{},
+		ports.WrapperConfig{},
 		rec.exec,
 		cliwrapperadapter.WrapperResolvers{Core: stubCoreResolver()},
 	)

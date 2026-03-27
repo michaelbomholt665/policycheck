@@ -5,7 +5,6 @@ package config
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -504,7 +503,7 @@ func normalizeDocumentationRoot(root string) (string, error) {
 	if trimmed == "" {
 		return "", fmt.Errorf("must not contain empty values")
 	}
-	if filepath.IsAbs(trimmed) {
+	if utils.IsPolicyAbsPath(trimmed) {
 		return "", fmt.Errorf("must be repo-relative: %q", root)
 	}
 
@@ -565,7 +564,7 @@ func normalizeScopeGuardPrefix(prefix string) (string, error) {
 	if trimmed == "" {
 		return "", fmt.Errorf("allowed_path_prefixes must not contain empty values")
 	}
-	if filepath.IsAbs(trimmed) {
+	if utils.IsPolicyAbsPath(trimmed) {
 		return "", fmt.Errorf("allowed_path_prefixes must be repo-relative: %q", prefix)
 	}
 

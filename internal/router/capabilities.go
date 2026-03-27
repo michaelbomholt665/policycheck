@@ -1,3 +1,7 @@
+// internal/router/capabilities.go
+// Defines the strictly typed structures for router-native capabilities,
+// which are mapped directly to implementation providers during boot.
+
 package router
 
 // CapabilityManifestEntry describes one router-native capability family.

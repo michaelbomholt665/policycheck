@@ -1,3 +1,7 @@
+// internal/router/extension.go
+// Defines the strictly typed structures for router extensions and orchestrates
+// their dependency-ordered initialization, registry commit, and boot rollback logic.
+
 package router
 
 import (
@@ -209,7 +213,7 @@ func RouterLoadExtensions(
 	}
 	warnings = append(warnings, applicationWarnings...)
 
-	snapshot := &routerSnapshot{
+	snapshot := &routerRegistrySnapshot{
 		providers:    localPorts,
 		restrictions: localRestrictions,
 	}
@@ -410,6 +414,10 @@ func routerClassifyExtensionError(ext Extension, err error) error {
 	}
 }
 
+// routerCloneRegistry creates an isolated, in-memory copy of the local registry.
+//
+// Staging the mutations allows for atomic commit attempts or isolated resolution
+// testing without exposing intermediate state to other extensions.
 func routerCloneRegistry(registryHandle *Registry) *Registry {
 	stagedPorts := maps.Clone(*registryHandle.ports)
 	stagedRestrictions := make(map[PortName][]string, len(*registryHandle.restrictions))
@@ -423,11 +431,19 @@ func routerCloneRegistry(registryHandle *Registry) *Registry {
 	}
 }
 
+// routerCommitRegistry merges the mutated staged registry back into the local handle.
+//
+// This is called upon successful extension registration to persist new bindings
+// into the core router state before progressing to the next layer.
 func routerCommitRegistry(dst *Registry, src *Registry) {
 	*dst.ports = *src.ports
 	*dst.restrictions = *src.restrictions
 }
 
+// routerRollbackExtensionForAttempt filters an extension for rollback participation.
+//
+// It ensures that only extensions which have actually started initializing for the
+// current attempt are collected for subsequent rollback routines.
 func routerRollbackExtensionForAttempt(
 	ext Extension,
 	currentAttemptStarted bool,
@@ -439,6 +455,10 @@ func routerRollbackExtensionForAttempt(
 	return ext
 }
 
+// routerRollbackExtensions triggers the teardown sequence for booted rollback extensions.
+//
+// It guarantees that the loaded capabilities have their rollback routines invoked
+// in reverse order, unwinding the boot sequence cleanly on failure.
 func routerRollbackExtensions(
 	ctx context.Context,
 	currentRollbackExt Extension,
@@ -471,6 +491,10 @@ func routerRollbackExtensions(
 	return errors.Join(rollbackErrs...)
 }
 
+// routerRollbackLoadFailure extracts the root cause and initiated rollbacks from a sequence failure.
+//
+// It acts as the unwinding entrypoint, ensuring that when an extension layer fails to load,
+// previous extensions are cleanly discarded and errors are combined.
 func routerRollbackLoadFailure(
 	ctx context.Context,
 	loadErr error,
@@ -490,6 +514,10 @@ func routerRollbackLoadFailure(
 	)
 }
 
+// routerCombineRollbackFailure joins a primary boot failure with any subsequent rollback errors.
+//
+// If the original issue was a structured RouterError, it preserves its categorization while
+// deeply embedding the cleanup exceptions into the internal causal chain.
 func routerCombineRollbackFailure(primaryErr error, rollbackErr error) error {
 	if primaryErr == nil {
 		return rollbackErr

@@ -1,4 +1,5 @@
-// internal\router\ext\extensions\telemetry\extension.go
+// internal/router/ext/extensions/telemetry/extension.go
+// Defines the strictly typed router extension for the telemetry capability.
 
 package telemetry
 

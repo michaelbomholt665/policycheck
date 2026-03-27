@@ -1,3 +1,4 @@
+// internal/adapters/cliwrappercore/extension.go
 package cliwrappercore
 
 import "policycheck/internal/router"

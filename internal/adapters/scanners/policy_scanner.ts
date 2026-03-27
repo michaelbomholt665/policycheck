@@ -1,3 +1,4 @@
+// internal/adapters/scanners/policy_scanner.ts
 // cmd/policycheck/policy_scanner.ts
 
 /**

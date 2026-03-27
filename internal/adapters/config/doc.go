@@ -1,3 +1,5 @@
+// internal/adapters/config/doc.go
+//
 // Package config Provides the router-backed configuration adapter.
 //
 // Package Concerns:

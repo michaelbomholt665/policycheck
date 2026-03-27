@@ -194,12 +194,6 @@ def count_parameters(node: ast.FunctionDef | ast.AsyncFunctionDef) -> tuple[int,
     if kwarg := node.args.kwarg:
         params.append(kwarg.arg)
 
-    # Exclude 'self' and 'cls' for methods
-    if params and params[0] in ("self", "cls"):
-        remaining = params.copy()
-        _ = remaining.pop(0)
-        return len(remaining), remaining
-
     return len(params), params
 
 

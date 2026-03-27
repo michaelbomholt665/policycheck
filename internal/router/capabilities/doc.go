@@ -1,4 +1,4 @@
-// Package capabilities Defines thin router-native capability contracts and typed resolvers.
+// Package capabilities defines thin router-native capability contracts and typed resolvers.
 //
 // Package Concerns:
 // - Keep this package limited to contracts and resolver helpers.

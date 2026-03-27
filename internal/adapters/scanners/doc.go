@@ -1,3 +1,5 @@
+// internal/adapters/scanners/doc.go
+//
 // Package scanners Provides the router-backed orchestration for policy scanners.
 //
 // Package Concerns:

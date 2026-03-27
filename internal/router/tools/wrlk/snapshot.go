@@ -1,3 +1,6 @@
+// internal/router/tools/wrlk/snapshot.go
+// Provides pure utility functions for timestamping mutation snapshots.
+
 package main
 
 import "time"

@@ -1,3 +1,7 @@
+// internal/router/registry.go
+// Provides functions to resolve extension providers from the core registry
+// and enforces consumer access controls.
+
 package router
 
 // RouterResolveProvider resolves a provider from the published registry.

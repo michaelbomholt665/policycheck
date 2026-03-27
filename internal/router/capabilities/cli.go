@@ -1,3 +1,7 @@
+// internal/router/capabilities/cli.go
+// Defines the strictly typed router capabilities for CLI output styling,
+// chrome rendering, and interactive prompting.
+
 package capabilities
 
 import (

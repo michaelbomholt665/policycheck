@@ -1,3 +1,6 @@
+// internal/router/ext/extensions/prettystyle/doc.go
+// Provides documentation for the optional CLI output style extension.
+
 // Package prettystyle is a router capability extension that registers an optional
 // CLI output provider for router consumers.
 //

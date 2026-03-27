@@ -1,3 +1,5 @@
+// internal/adapters/cliwrappercore/doc.go
+//
 // Package cliwrappercore Adapts shared wrapper core logic into a router-wired provider.
 //
 // Package Concerns:

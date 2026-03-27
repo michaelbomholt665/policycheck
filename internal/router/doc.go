@@ -16,8 +16,8 @@
 // This package is protected by 'router.lock'. Manual edits to the Core will break the checksums
 // and fail the CI/CD pipeline.
 // - AGENT ACTION: If you need to add a Port, you MUST NOT manually edit ports.go.
-// - AGENT ACTION: Use the command: `go run ./internal/router/tools/wrlk add --name <PortName> --value <string>`
-// - RESULT: The tool will update ports.go, registry_imports.go, and re-calculate the lock.
+// - AGENT ACTION: Use the command: `go run ./internal/router/tools/wrlk register --port --router --name <PortName> --value <string>`
+// - RESULT: The tool will update the manifest, regenerate router files, and re-calculate the lock.
 //
 // ### 3. FORBIDDEN PATTERNS (AI CHEAT-SHEET)
 //   - NO SHARED STATE: Extensions must not share state via global variables. All sharing happens through Ports.
@@ -27,13 +27,15 @@
 //   - NO MANUAL BOOTING: Only ext.RouterBootExtensions is authorized to trigger the loading sequence.
 //
 // ### 4. EXTENSION IMPLEMENTATION STEPS
-// 1. SCAFFOLD: Run `wrlk add` to register the PortName.
-// 2. DEFINE: Create the interface in the domain-specific package (internal/ports).
-// 3. IMPLEMENT: Create an Extension struct in internal/ext.
-// 4. REGISTER: Use reg.RouterRegisterProvider(router.PortName, implementation).
-// 5. WIRE:
-//   - Optional capability extension: `go run ./internal/router/tools/wrlk ext add --name <ExtensionName>`
-//   - Required application extension: `go run ./internal/router/tools/wrlk ext app add --name <ExtensionName>`
+//  1. SCAFFOLD: Run `wrlk register --port --router` to register the PortName.
+//  2. DEFINE: Create the interface in the domain-specific package (internal/ports).
+//  3. IMPLEMENT: Create either a router-owned extension in
+//     internal/router/ext/extensions/<name> or an app-owned adapter extension in
+//     internal/adapters/<name>, depending on boot ownership.
+//  4. REGISTER: Use reg.RouterRegisterProvider(router.PortName, implementation).
+//  5. WIRE THROUGH THE MANIFESTS:
+//     - Optional capability extension: `go run ./internal/router/tools/wrlk register --ext --router --name <ExtensionName>`
+//     - Required application extension: `go run ./internal/router/tools/wrlk register --ext --app --name <ExtensionName>`
 //
 // ### 5. PERFORMANCE INVARIANT
 // This router is optimized for <1ns resolution.

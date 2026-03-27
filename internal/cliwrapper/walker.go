@@ -185,7 +185,7 @@ func (w HeaderWalker) buildHeaderChange(relPath string, status HeaderStatus) Hea
 
 // ResolveRepoRoot returns the nearest repository root marker or startDir when none is found.
 func ResolveRepoRoot(startDir string) string {
-	for _, marker := range []string{"policy-gate.toml", "wrapper-gate.toml", ".git"} {
+	for _, marker := range []string{RepoConfigFilename, ".git"} {
 		if path := walkUpForFile(startDir, marker); path != "" {
 			if filepath.Base(path) == ".git" {
 				return filepath.Dir(path)
@@ -200,7 +200,7 @@ func ResolveRepoRoot(startDir string) string {
 
 // InspectHeader reports whether the file contains the expected header.
 func InspectHeader(content string, language string, relPath string) (HeaderStatus, error) {
-	lines := firstLines(normalizeNewlines(content), 3)
+	lines := firstLines(normalizeNewlines(content), 6)
 	expected, err := headerComment(language, relPath)
 	if err != nil {
 		return HeaderStatus{}, err
@@ -208,20 +208,19 @@ func InspectHeader(content string, language string, relPath string) (HeaderStatu
 
 	switch language {
 	case "go", "typescript":
-		if len(lines) == 0 {
-			return HeaderStatus{}, nil
-		}
+		for _, line := range lines {
+			path, ok := parseHeaderPath(line, language)
+			if !ok {
+				continue
+			}
 
-		path, ok := parseHeaderPath(lines[0], language)
-		if !ok {
-			return HeaderStatus{}, nil
+			return HeaderStatus{
+				Found:        true,
+				Matches:      line == expected,
+				ExistingPath: path,
+			}, nil
 		}
-
-		return HeaderStatus{
-			Found:        true,
-			Matches:      path == relPath,
-			ExistingPath: path,
-		}, nil
+		return HeaderStatus{}, nil
 	case "python":
 		for _, line := range lines {
 			path, ok := parseHeaderPath(line, language)
@@ -255,7 +254,7 @@ func InjectHeader(content string, language string, relPath string) (string, erro
 
 	switch language {
 	case "go", "typescript":
-		return injectSlashCommentHeader(lines, newline, relPath), nil
+		return injectSlashCommentHeader(lines, newline, relPath, language), nil
 	case "python":
 		return injectPythonHeader(lines, newline, relPath), nil
 	default:
@@ -301,16 +300,20 @@ func shouldSkipHeaderPath(relPath string) bool {
 }
 
 // injectSlashCommentHeader inserts or replaces the leading path header for Go and TypeScript files.
-func injectSlashCommentHeader(lines []string, newline string, relPath string) string {
+func injectSlashCommentHeader(lines []string, newline string, relPath string, language string) string {
 	header := "// " + relPath
-	body := append([]string(nil), lines...)
-	if len(body) > 0 {
-		if _, ok := parseHeaderPath(body[0], "go"); ok {
-			body = body[1:]
-		}
+	body := removeLeadingPathHeaders(lines, language)
+	insertAt := 0
+	if language == "go" {
+		insertAt = findGoHeaderInsertIndex(body)
 	}
 
-	return joinLines(append([]string{header}, body...), newline)
+	withHeader := insertLine(body, insertAt, header)
+	if shouldSeparateHeaderBlock(body, insertAt, language) {
+		withHeader = insertLine(withHeader, insertAt+1, "")
+	}
+
+	return joinLines(withHeader, newline)
 }
 
 // injectPythonHeader inserts or replaces the shebang-aware path header for Python files.
@@ -350,15 +353,116 @@ func parseHeaderPath(line string, language string) (string, bool) {
 		if !strings.HasPrefix(line, "// ") {
 			return "", false
 		}
-		return strings.TrimSpace(strings.TrimPrefix(line, "// ")), true
+		path := strings.TrimSpace(strings.TrimPrefix(line, "// "))
+		if !looksLikePathHeader(path, language) {
+			return "", false
+		}
+		return path, true
 	case "python":
 		if !strings.HasPrefix(line, "# ") || strings.HasPrefix(line, "#!/") {
 			return "", false
 		}
-		return strings.TrimSpace(strings.TrimPrefix(line, "# ")), true
+		path := strings.TrimSpace(strings.TrimPrefix(line, "# "))
+		if !looksLikePathHeader(path, language) {
+			return "", false
+		}
+		return path, true
 	default:
 		return "", false
 	}
+}
+
+func looksLikePathHeader(path string, language string) bool {
+	if path == "" || strings.ContainsAny(path, " \t") {
+		return false
+	}
+
+	switch language {
+	case "go":
+		return filepath.Ext(path) == ".go"
+	case "python":
+		return filepath.Ext(path) == ".py"
+	case "typescript":
+		ext := filepath.Ext(path)
+		return ext == ".ts" || ext == ".tsx"
+	default:
+		return false
+	}
+}
+
+func removeLeadingPathHeaders(lines []string, language string) []string {
+	body := make([]string, 0, len(lines))
+	scanningPreamble := true
+
+	for _, line := range lines {
+		if scanningPreamble {
+			if _, ok := parseHeaderPath(line, language); ok {
+				continue
+			}
+			if !isPreambleLine(line, language) {
+				scanningPreamble = false
+			}
+		}
+
+		body = append(body, line)
+	}
+
+	return body
+}
+
+func isPreambleLine(line string, language string) bool {
+	if line == "" {
+		return true
+	}
+
+	switch language {
+	case "go", "typescript":
+		return strings.HasPrefix(line, "//")
+	case "python":
+		return strings.HasPrefix(line, "#")
+	default:
+		return false
+	}
+}
+
+func findGoHeaderInsertIndex(lines []string) int {
+	index := 0
+	for index < len(lines) && isGoBuildConstraintLine(lines[index]) {
+		index++
+	}
+	for index < len(lines) && lines[index] == "" {
+		index++
+	}
+
+	return index
+}
+
+func isGoBuildConstraintLine(line string) bool {
+	return strings.HasPrefix(line, "//go:build") || strings.HasPrefix(line, "// +build")
+}
+
+func shouldSeparateHeaderBlock(lines []string, insertAt int, language string) bool {
+	if insertAt >= len(lines) || lines[insertAt] == "" {
+		return false
+	}
+
+	switch language {
+	case "go", "typescript":
+		return strings.HasPrefix(lines[insertAt], "//")
+	case "python":
+		return strings.HasPrefix(lines[insertAt], "#") && !strings.HasPrefix(lines[insertAt], "#!")
+	default:
+		return false
+	}
+}
+
+func insertLine(lines []string, index int, value string) []string {
+	result := make([]string, 0, len(lines)+1)
+	result = append(result, lines[:index]...)
+	result = append(result, value)
+	result = append(result, lines[index:]...)
+
+	return result
 }
 
 // firstLines returns up to count leading logical lines from content.
