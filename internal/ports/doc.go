@@ -5,5 +5,5 @@
 //
 // Package Concerns:
 // - Defining the walk, scanner, config, and read-file provider interfaces.
-// - Defining the CLI wrapper subsystem port boundary (CLIWrapperDispatcher, CLIWrapperSecurityGate, CLIWrapperMacroRunner, CLIWrapperFormatter).
+// - Defining the CLI wrapper subsystem port boundary (CLIWrapperCore, CLIWrapperDispatcher, CLIWrapperSecurityGate, CLIWrapperMacroRunner, CLIWrapperFormatter).
 package ports

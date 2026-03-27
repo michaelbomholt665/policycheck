@@ -2,167 +2,121 @@
 package cliwrapper
 
 import (
-	"context"
+	"fmt"
 
-	corecliwrapper "policycheck/internal/cliwrapper"
+	"policycheck/internal/ports"
+	"policycheck/internal/router"
 )
 
 // ExecFunc executes one wrapper command.
-type ExecFunc func(ctx context.Context, args []string) error
+type ExecFunc = ports.ExecFunc
 
 // Severity aliases the shared wrapper severity model for adapter consumers.
-type Severity = corecliwrapper.Severity
+type Severity = ports.WrapperSeverity
 
 const (
 	// SeverityInfo is the informational severity level.
-	SeverityInfo = corecliwrapper.SeverityInfo
+	SeverityInfo = ports.SeverityInfo
 	// SeverityLow is the low severity level.
-	SeverityLow = corecliwrapper.SeverityLow
+	SeverityLow = ports.SeverityLow
 	// SeverityModerate is the moderate severity level.
-	SeverityModerate = corecliwrapper.SeverityModerate
+	SeverityModerate = ports.SeverityModerate
 	// SeverityHigh is the high severity level.
-	SeverityHigh = corecliwrapper.SeverityHigh
+	SeverityHigh = ports.SeverityHigh
 	// SeverityCritical is the critical severity level.
-	SeverityCritical = corecliwrapper.SeverityCritical
+	SeverityCritical = ports.SeverityCritical
 )
 
 type (
 	// WrapperSecurityConfig aliases the shared wrapper security config.
-	WrapperSecurityConfig = corecliwrapper.WrapperSecurityConfig
+	WrapperSecurityConfig = ports.WrapperSecurityConfig
 	// WrapperToolingGate aliases the shared named tooling-gate config.
-	WrapperToolingGate = corecliwrapper.WrapperToolingGate
+	WrapperToolingGate = ports.WrapperToolingGate
 	// WrapperToolingConfig aliases the shared tooling config container.
-	WrapperToolingConfig = corecliwrapper.WrapperToolingConfig
+	WrapperToolingConfig = ports.WrapperToolingConfig
 	// WrapperMacroConfig aliases the shared macro config schema.
-	WrapperMacroConfig = corecliwrapper.WrapperMacroConfig
+	WrapperMacroConfig = ports.WrapperMacroConfig
 	// WrapperUIConfig aliases the shared wrapper UI config schema.
-	WrapperUIConfig = corecliwrapper.WrapperUIConfig
+	WrapperUIConfig = ports.WrapperUIConfig
 	// WrapperConfig aliases the shared wrapper config root.
-	WrapperConfig = corecliwrapper.WrapperConfig
-	// WrapperConfigLoader aliases the shared wrapper config loader.
-	WrapperConfigLoader = corecliwrapper.WrapperConfigLoader
+	WrapperConfig = ports.WrapperConfig
+	// WrapperLoadResult aliases the shared wrapper config load result.
+	WrapperLoadResult = ports.WrapperLoadResult
 	// RiskBlockError aliases the shared risk-blocking error type.
-	RiskBlockError = corecliwrapper.RiskBlockError
+	RiskBlockError = ports.RiskBlockError
 )
 
 // WrapperMode aliases the shared wrapper command classification enum.
-type WrapperMode = corecliwrapper.WrapperMode
+type WrapperMode = ports.WrapperMode
 
 const (
 	// ModePassthrough forwards the command directly to the executor.
-	ModePassthrough = corecliwrapper.ModePassthrough
+	ModePassthrough = ports.ModePassthrough
 	// ModePackageGate routes through the package-security gate.
-	ModePackageGate = corecliwrapper.ModePackageGate
+	ModePackageGate = ports.ModePackageGate
 	// ModeToolingGate routes through the tooling-gate chain.
-	ModeToolingGate = corecliwrapper.ModeToolingGate
+	ModeToolingGate = ports.ModeToolingGate
 	// ModeMacroRun routes through the macro runner.
-	ModeMacroRun = corecliwrapper.ModeMacroRun
+	ModeMacroRun = ports.ModeMacroRun
 	// ModeFormatHeaders routes through the header formatter.
-	ModeFormatHeaders = corecliwrapper.ModeFormatHeaders
+	ModeFormatHeaders = ports.ModeFormatHeaders
 )
 
-// WrapperDetector aliases the shared wrapper detector.
-type WrapperDetector = corecliwrapper.WrapperDetector
-
 // ThenToken separates the gate and main commands in a tooling chain.
-const ThenToken = corecliwrapper.ThenToken
+const ThenToken = ports.ThenToken
 
 // Ecosystem aliases the shared package ecosystem identifier.
-type Ecosystem = corecliwrapper.Ecosystem
+type Ecosystem = ports.WrapperEcosystem
 
 const (
 	// EcosystemNPM is the npm ecosystem.
-	EcosystemNPM = corecliwrapper.EcosystemNPM
+	EcosystemNPM = ports.EcosystemNPM
 	// EcosystemPyPI is the Python package ecosystem.
-	EcosystemPyPI = corecliwrapper.EcosystemPyPI
+	EcosystemPyPI = ports.EcosystemPyPI
 	// EcosystemGo is the Go module ecosystem.
-	EcosystemGo = corecliwrapper.EcosystemGo
+	EcosystemGo = ports.EcosystemGo
 	// EcosystemPyPIUV is the uv-managed PyPI ecosystem.
-	EcosystemPyPIUV = corecliwrapper.EcosystemPyPIUV
+	EcosystemPyPIUV = ports.EcosystemPyPIUV
 )
 
 // PackageManagerAction aliases the shared install-action enum.
-type PackageManagerAction = corecliwrapper.PackageManagerAction
+type PackageManagerAction = ports.PackageManagerAction
 
 // ActionInstall is the shared install action.
-const ActionInstall = corecliwrapper.ActionInstall
+const ActionInstall = ports.ActionInstall
 
 // InstallRequest aliases the shared parsed install request type.
-type InstallRequest = corecliwrapper.InstallRequest
+type InstallRequest = ports.InstallRequest
 
 // SecurityDecision aliases the shared security decision enum.
-type SecurityDecision = corecliwrapper.SecurityDecision
+type SecurityDecision = ports.SecurityDecision
 
 const (
 	// DecisionAllow allows the wrapped command to continue.
-	DecisionAllow = corecliwrapper.DecisionAllow
+	DecisionAllow = ports.DecisionAllow
 	// DecisionBlock blocks the wrapped command.
-	DecisionBlock = corecliwrapper.DecisionBlock
+	DecisionBlock = ports.DecisionBlock
 	// DecisionScannerFailure blocks because scanning failed.
-	DecisionScannerFailure = corecliwrapper.DecisionScannerFailure
+	DecisionScannerFailure = ports.DecisionScannerFailure
 )
 
 type (
 	// Advisory aliases the shared vulnerability advisory type.
-	Advisory = corecliwrapper.Advisory
+	Advisory = ports.WrapperAdvisory
 	// SecurityResult aliases the shared security evaluation result type.
-	SecurityResult = corecliwrapper.SecurityResult
+	SecurityResult = ports.SecurityResult
 )
 
-// ErrUnsupportedManager aliases the shared unsupported-manager error sentinel.
-var ErrUnsupportedManager = corecliwrapper.ErrUnsupportedManager
+func resolveWrapperCore() (ports.CLIWrapperCore, error) {
+	raw, err := router.RouterResolveProvider(router.PortCLIWrapperCore)
+	if err != nil {
+		return nil, fmt.Errorf("resolve CLIWrapperCore: %w", err)
+	}
 
-// ParseSeverity parses a severity label with shared wrapper semantics.
-func ParseSeverity(value string) (Severity, error) {
-	return corecliwrapper.ParseSeverity(value)
-}
+	core, ok := raw.(ports.CLIWrapperCore)
+	if !ok {
+		return nil, fmt.Errorf("provider does not implement CLIWrapperCore")
+	}
 
-// SeverityAtLeast reports whether candidate is at least as strict as base.
-func SeverityAtLeast(candidate, base Severity) bool {
-	return corecliwrapper.SeverityAtLeast(candidate, base)
-}
-
-// CanonicalSeverityLabel returns the canonical label for a severity value.
-func CanonicalSeverityLabel(severity Severity) string {
-	return corecliwrapper.CanonicalSeverityLabel(severity)
-}
-
-// DefaultWrapperConfig returns the shared default wrapper config.
-func DefaultWrapperConfig() WrapperConfig {
-	return corecliwrapper.DefaultWrapperConfig()
-}
-
-// DefaultGlobalConfigPath returns the shared machine-global config path.
-func DefaultGlobalConfigPath() (string, error) {
-	return corecliwrapper.DefaultGlobalConfigPath()
-}
-
-// ParseInstallRequest parses package-manager args using the shared parser.
-func ParseInstallRequest(args []string) (InstallRequest, error) {
-	return corecliwrapper.ParseInstallRequest(args)
-}
-
-// SplitChain splits a tooling chain at the shared -then token.
-func SplitChain(args []string) (gate, main []string, chained bool) {
-	return corecliwrapper.SplitChain(args)
-}
-
-// RunChain runs the gate command before the main command.
-func RunChain(ctx context.Context, gate, main []string, exec ExecFunc) error {
-	return corecliwrapper.RunChain(ctx, gate, main, corecliwrapper.ExecFunc(exec))
-}
-
-// EvaluateSeverity evaluates advisories against a threshold severity.
-func EvaluateSeverity(threshold Severity, advisories []Advisory) SecurityResult {
-	return corecliwrapper.EvaluateSeverity(threshold, advisories)
-}
-
-// EvaluateSecurityPolicy evaluates advisories against an explicit wrapper policy.
-func EvaluateSecurityPolicy(cfg WrapperSecurityConfig, advisories []Advisory) SecurityResult {
-	return corecliwrapper.EvaluateSecurityPolicy(cfg, advisories)
-}
-
-// IsRiskOverrideAllowed reports whether allowRisk covers blockedSeverity.
-func IsRiskOverrideAllowed(allowRisk string, blockedSeverity Severity) (bool, error) {
-	return corecliwrapper.IsRiskOverrideAllowed(allowRisk, blockedSeverity)
+	return core, nil
 }

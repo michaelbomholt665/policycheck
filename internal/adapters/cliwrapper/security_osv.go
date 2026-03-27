@@ -140,16 +140,21 @@ func buildOSVQueries(purls []string) []osvPURL {
 }
 
 func (a *OSVSecurityAdapter) evaluateAdvisories(advisories []Advisory) (SecurityResult, error) {
+	coreProvider, err := resolveWrapperCore()
+	if err != nil {
+		return SecurityResult{}, fmt.Errorf("resolve wrapper core: %w", err)
+	}
+
 	cfg, err := loadActiveAdapterConfig()
 	if err != nil {
 		if isZeroSecurityConfig(a.defaultConfig) {
 			return SecurityResult{}, err
 		}
 
-		return EvaluateSecurityPolicy(a.defaultConfig, advisories), nil
+		return coreProvider.EvaluateSecurityPolicy(a.defaultConfig, advisories), nil
 	}
 
-	return EvaluateSecurityPolicy(cfg.Security, advisories), nil
+	return coreProvider.EvaluateSecurityPolicy(cfg.Security, advisories), nil
 }
 
 func isZeroSecurityConfig(cfg WrapperSecurityConfig) bool {

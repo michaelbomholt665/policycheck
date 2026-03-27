@@ -132,7 +132,7 @@ func validateImport(rel, importPath string, line int, cfg config.PolicyConfig) *
 // validateBusinessImport ensures business packages do not import forbidden prefixes.
 func validateBusinessImport(rel, importPath string, line int, cfg config.PolicyConfig) *types.Violation {
 	for _, forbidden := range cfg.RouterImports.ForbiddenBusinessImportPrefixes {
-		if strings.HasPrefix(importPath, forbidden) {
+		if matchesImportBoundary(importPath, normalizeImportPrefix(forbidden)) {
 			return &types.Violation{
 				RuleID:   "structure.router_imports",
 				File:     rel,
@@ -142,11 +142,56 @@ func validateBusinessImport(rel, importPath string, line int, cfg config.PolicyC
 			}
 		}
 	}
-	return nil
+
+	if !isInternalModuleImport(importPath) {
+		return nil
+	}
+
+	if isBusinessImport(importPath, cfg.RouterImports.BusinessRoots) {
+		return nil
+	}
+
+	if isAllowedBusinessImport(importPath, cfg.RouterImports.AllowedBusinessImports) {
+		return nil
+	}
+
+	return &types.Violation{
+		RuleID:   "structure.router_imports",
+		File:     rel,
+		Line:     line,
+		Message:  fmt.Sprintf("business package imports internal package %q outside allowed router boundaries; use internal/ports, internal/router, or configured business packages", importPath),
+		Severity: "error",
+	}
+}
+
+// isInternalModuleImport reports whether the import targets this repository's internal tree.
+func isInternalModuleImport(importPath string) bool {
+	return importPath == "policycheck/internal" || strings.HasPrefix(importPath, "policycheck/internal/")
+}
+
+// isAllowedBusinessImport reports whether the import is explicitly allowed for business packages.
+func isAllowedBusinessImport(importPath string, allowedImports []string) bool {
+	for _, allowed := range allowedImports {
+		if importPath == allowed {
+			return true
+		}
+	}
+
+	return false
 }
 
 // validateAdapterImport prevents adapter-to-adapter imports if configured.
 func validateAdapterImport(rel, importPath string, line int, cfg config.PolicyConfig) *types.Violation {
+	if isBusinessImport(importPath, cfg.RouterImports.BusinessRoots) && !isAllowedAdapterBusinessImport(importPath) {
+		return &types.Violation{
+			RuleID:   "structure.router_imports",
+			File:     rel,
+			Line:     line,
+			Message:  fmt.Sprintf("adapter package imports business package %q; adapters must depend on router ports/contracts instead", importPath),
+			Severity: "error",
+		}
+	}
+
 	if !isAdapterImport(importPath, cfg.RouterImports.AdapterRoots) {
 		return nil
 	}
@@ -201,20 +246,35 @@ func isAdapterImport(importPath string, adapterRoots []string) bool {
 	for _, root := range adapterRoots {
 		// Module prefix + root
 		prefix := "policycheck/" + root
-		if importPath == prefix || strings.HasPrefix(importPath, prefix+"/") {
+		if matchesImportBoundary(importPath, prefix) {
 			return true
 		}
 	}
 	return false
 }
 
+// isAllowedAdapterBusinessImport reports whether an adapter may import a business-side contract package.
+func isAllowedAdapterBusinessImport(importPath string) bool {
+	return importPath == "policycheck/internal/ports"
+}
+
 // isBusinessImport returns true if the import path refers to a business package.
 func isBusinessImport(importPath string, businessRoots []string) bool {
 	for _, root := range businessRoots {
 		prefix := "policycheck/" + root
-		if importPath == prefix || strings.HasPrefix(importPath, prefix+"/") {
+		if matchesImportBoundary(importPath, prefix) {
 			return true
 		}
 	}
 	return false
+}
+
+// matchesImportBoundary reports whether importPath matches prefix exactly or as a child package.
+func matchesImportBoundary(importPath string, prefix string) bool {
+	return importPath == prefix || strings.HasPrefix(importPath, prefix+"/")
+}
+
+// normalizeImportPrefix trims a trailing slash so config prefixes match exact packages too.
+func normalizeImportPrefix(prefix string) string {
+	return strings.TrimSuffix(prefix, "/")
 }

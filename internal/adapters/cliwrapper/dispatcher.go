@@ -22,10 +22,10 @@ import (
 // injected ExecFunc handles all subprocess execution so tests can verify
 // orchestration without starting real processes.
 type WrapperDispatcher struct {
-	detector             WrapperDetector
 	cfg                  WrapperConfig
 	exec                 ExecFunc
 	loadConfig           func() (WrapperConfig, error)
+	coreResolver         func() (ports.CLIWrapperCore, error)
 	securityGateResolver func() (ports.CLIWrapperSecurityGate, error)
 	macroRunnerResolver  func() (ports.CLIWrapperMacroRunner, error)
 	formatterResolver    func() (ports.CLIWrapperFormatter, error)
@@ -34,6 +34,7 @@ type WrapperDispatcher struct {
 // WrapperResolvers groups injected router-provider resolvers for tests and
 // alternate host seams.
 type WrapperResolvers struct {
+	Core         func() (ports.CLIWrapperCore, error)
 	SecurityGate func() (ports.CLIWrapperSecurityGate, error)
 	MacroRunner  func() (ports.CLIWrapperMacroRunner, error)
 	Formatter    func() (ports.CLIWrapperFormatter, error)
@@ -46,10 +47,10 @@ type WrapperResolvers struct {
 // pass OsExec.
 func NewWrapperDispatcher(cfg WrapperConfig, exec ExecFunc) *WrapperDispatcher {
 	return &WrapperDispatcher{
-		detector:             WrapperDetector{},
 		cfg:                  cfg,
 		exec:                 exec,
 		loadConfig:           staticWrapperConfigLoader(cfg),
+		coreResolver:         resolveWrapperCore,
 		securityGateResolver: resolveSecurityGate,
 		macroRunnerResolver:  resolveMacroRunner,
 		formatterResolver:    resolveFormatter,
@@ -77,6 +78,9 @@ func NewWrapperDispatcherWithResolvers(
 	resolvers WrapperResolvers,
 ) *WrapperDispatcher {
 	dispatcher := NewWrapperDispatcher(cfg, exec)
+	if resolvers.Core != nil {
+		dispatcher.coreResolver = resolvers.Core
+	}
 	if resolvers.SecurityGate != nil {
 		dispatcher.securityGateResolver = resolvers.SecurityGate
 	}
@@ -104,7 +108,10 @@ func (d *WrapperDispatcher) Dispatch(ctx context.Context, args []string) error {
 	}
 
 	macroNames := collectMacroNames(cfg)
-	mode := d.detector.Detect(args, macroNames)
+	mode, err := detectWrapperMode(d.coreResolver, args, macroNames)
+	if err != nil {
+		return fmt.Errorf("dispatcher: detect mode: %w", err)
+	}
 
 	switch mode {
 	case ModePackageGate:
@@ -138,12 +145,17 @@ func loadActiveDispatcherConfig() (WrapperConfig, error) {
 //
 // The security gate is resolved fresh from the router on each call.
 func (d *WrapperDispatcher) dispatchPackageGate(ctx context.Context, args []string) error {
-	commandArgs, allowRisk, err := parseAllowRiskArgs(args)
+	commandArgs, allowRisk, err := parseAllowRiskArgs(d.coreResolver, args)
 	if err != nil {
 		return fmt.Errorf("dispatcher: package gate: parse allow-risk: %w", err)
 	}
 
-	req, err := ParseInstallRequest(commandArgs)
+	coreProvider, err := d.coreResolver()
+	if err != nil {
+		return fmt.Errorf("dispatcher: package gate: resolve wrapper core: %w", err)
+	}
+
+	req, err := coreProvider.ParseInstallRequest(commandArgs)
 	if err != nil {
 		return fmt.Errorf("dispatcher: package gate: parse: %w", err)
 	}
@@ -180,7 +192,7 @@ func (d *WrapperDispatcher) checkGateWithRiskOverride(
 		return nil
 	}
 
-	return resolveRiskOverride(allowRisk, err)
+	return resolveRiskOverride(d.coreResolver, allowRisk, err)
 }
 
 func (d *WrapperDispatcher) checkLockfileWithRiskOverride(
@@ -195,18 +207,23 @@ func (d *WrapperDispatcher) checkLockfileWithRiskOverride(
 		return nil
 	}
 
-	return resolveRiskOverride(allowRisk, err)
+	return resolveRiskOverride(d.coreResolver, allowRisk, err)
 }
 
 // dispatchToolingGate handles ModeToolingGate args, splitting on -then when
 // present and running the resulting chain.
 func (d *WrapperDispatcher) dispatchToolingGate(ctx context.Context, args []string) error {
-	gate, main, chained := SplitChain(args)
+	coreProvider, err := d.coreResolver()
+	if err != nil {
+		return fmt.Errorf("dispatcher: tooling gate: resolve wrapper core: %w", err)
+	}
+
+	gate, main, chained := coreProvider.SplitChain(args)
 	if !chained {
 		return d.exec(ctx, args)
 	}
 
-	if err := RunChain(ctx, gate, main, d.exec); err != nil {
+	if err := coreProvider.RunChain(ctx, gate, main, d.exec); err != nil {
 		return fmt.Errorf("dispatcher: tooling gate chain: %w", err)
 	}
 
@@ -322,6 +339,15 @@ func collectMacroNames(cfg WrapperConfig) []string {
 	return names
 }
 
+func detectWrapperMode(resolver func() (ports.CLIWrapperCore, error), args []string, macroNames []string) (WrapperMode, error) {
+	coreProvider, err := resolver()
+	if err != nil {
+		return ModePassthrough, err
+	}
+
+	return coreProvider.Detect(args, macroNames), nil
+}
+
 // parseFormatHeadersArgs parses CLI flags for the header-formatting command.
 func parseFormatHeadersArgs(args []string) (bool, []string, error) {
 	if len(args) < 2 {
@@ -361,7 +387,7 @@ func parseFormatHeadersArgs(args []string) (bool, []string, error) {
 	return dryRun, only, nil
 }
 
-func parseAllowRiskArgs(args []string) ([]string, string, error) {
+func parseAllowRiskArgs(resolver func() (ports.CLIWrapperCore, error), args []string) ([]string, string, error) {
 	filtered := make([]string, 0, len(args))
 	allowRisk := ""
 
@@ -376,7 +402,12 @@ func parseAllowRiskArgs(args []string) ([]string, string, error) {
 		}
 
 		allowRisk = strings.TrimPrefix(arg, "--allow-risk=")
-		if _, err := ParseSeverity(allowRisk); err != nil {
+		coreProvider, err := resolver()
+		if err != nil {
+			return nil, "", fmt.Errorf("resolve wrapper core: %w", err)
+		}
+
+		if _, err := coreProvider.ParseSeverity(allowRisk); err != nil {
 			return nil, "", fmt.Errorf("invalid allow-risk %q: %w", allowRisk, err)
 		}
 	}
@@ -384,13 +415,18 @@ func parseAllowRiskArgs(args []string) ([]string, string, error) {
 	return filtered, allowRisk, nil
 }
 
-func resolveRiskOverride(allowRisk string, err error) error {
+func resolveRiskOverride(resolver func() (ports.CLIWrapperCore, error), allowRisk string, err error) error {
 	var blockErr *RiskBlockError
 	if !errors.As(err, &blockErr) {
 		return err
 	}
 
-	allowed, parseErr := IsRiskOverrideAllowed(allowRisk, blockErr.Severity)
+	coreProvider, resolveErr := resolver()
+	if resolveErr != nil {
+		return fmt.Errorf("resolve wrapper core: %w", resolveErr)
+	}
+
+	allowed, parseErr := coreProvider.IsRiskOverrideAllowed(allowRisk, blockErr.Severity)
 	if parseErr != nil {
 		return fmt.Errorf("resolve allow-risk override: %w", parseErr)
 	}
@@ -398,14 +434,16 @@ func resolveRiskOverride(allowRisk string, err error) error {
 		return nil
 	}
 
+	blockedLabel := coreProvider.CanonicalSeverityLabel(blockErr.Severity)
+
 	if strings.TrimSpace(allowRisk) == "" {
-		return fmt.Errorf("%w; use --allow-risk=%s to override", err, strings.ToLower(CanonicalSeverityLabel(blockErr.Severity)))
+		return fmt.Errorf("%w; use --allow-risk=%s to override", err, strings.ToLower(blockedLabel))
 	}
 
 	return fmt.Errorf(
 		"%w; --allow-risk=%s is insufficient for %s",
 		err,
 		strings.ToLower(allowRisk),
-		strings.ToLower(CanonicalSeverityLabel(blockErr.Severity)),
+		strings.ToLower(blockedLabel),
 	)
 }

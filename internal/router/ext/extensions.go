@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"policycheck/internal/adapters/cliwrapper"
+	"policycheck/internal/adapters/cliwrappercore"
 	"policycheck/internal/adapters/config"
 	"policycheck/internal/adapters/readfile"
 	"policycheck/internal/adapters/scanners"
@@ -22,6 +23,7 @@ var extensions = []router.Extension{
 	&walk.Extension{},
 	&scanners.Extension{},
 
+	&cliwrappercore.Extension{},
 	&cliwrapper.Extension{},
 }
 

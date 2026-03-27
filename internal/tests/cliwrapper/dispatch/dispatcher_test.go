@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	cliwrapperadapter "policycheck/internal/adapters/cliwrapper"
+	cliwrappercore "policycheck/internal/adapters/cliwrappercore"
 	"policycheck/internal/ports"
 )
 
@@ -60,6 +61,12 @@ func (r *execRecorder) exec(_ context.Context, args []string) error {
 	return nil
 }
 
+func stubCoreResolver() func() (ports.CLIWrapperCore, error) {
+	return func() (ports.CLIWrapperCore, error) {
+		return cliwrappercore.Provider{}, nil
+	}
+}
+
 // TestDispatcher_PackageGate_Allowed verifies a package install is dispatched
 // when the security gate allows it.
 func TestDispatcher_PackageGate_Allowed(t *testing.T) {
@@ -68,10 +75,13 @@ func TestDispatcher_PackageGate_Allowed(t *testing.T) {
 	gate := &stubSecurityGate{}
 	rec := &execRecorder{}
 
-	d := cliwrapperadapter.NewWrapperDispatcherWithResolver(
+	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
 		cliwrapperadapter.WrapperConfig{},
 		rec.exec,
-		func() (ports.CLIWrapperSecurityGate, error) { return gate, nil },
+		cliwrapperadapter.WrapperResolvers{
+			Core:         stubCoreResolver(),
+			SecurityGate: func() (ports.CLIWrapperSecurityGate, error) { return gate, nil },
+		},
 	)
 	err := d.Dispatch(context.Background(), []string{"npm", "install", "lodash"})
 
@@ -92,10 +102,13 @@ func TestDispatcher_PackageGate_Blocked(t *testing.T) {
 	gate := &stubSecurityGate{packageErr: blockErr}
 	rec := &execRecorder{}
 
-	d := cliwrapperadapter.NewWrapperDispatcherWithResolver(
+	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
 		cliwrapperadapter.WrapperConfig{},
 		rec.exec,
-		func() (ports.CLIWrapperSecurityGate, error) { return gate, nil },
+		cliwrapperadapter.WrapperResolvers{
+			Core:         stubCoreResolver(),
+			SecurityGate: func() (ports.CLIWrapperSecurityGate, error) { return gate, nil },
+		},
 	)
 	err := d.Dispatch(context.Background(), []string{"npm", "install", "lodash"})
 
@@ -115,10 +128,13 @@ func TestDispatcher_PackageGate_AllowRiskOverridesMatchingSeverity(t *testing.T)
 	}
 	rec := &execRecorder{}
 
-	d := cliwrapperadapter.NewWrapperDispatcherWithResolver(
+	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
 		cliwrapperadapter.WrapperConfig{},
 		rec.exec,
-		func() (ports.CLIWrapperSecurityGate, error) { return gate, nil },
+		cliwrapperadapter.WrapperResolvers{
+			Core:         stubCoreResolver(),
+			SecurityGate: func() (ports.CLIWrapperSecurityGate, error) { return gate, nil },
+		},
 	)
 	err := d.Dispatch(context.Background(), []string{"npm", "install", "lodash", "--allow-risk=high"})
 
@@ -138,10 +154,13 @@ func TestDispatcher_PackageGate_AllowRiskTooLowStillBlocks(t *testing.T) {
 	}
 	rec := &execRecorder{}
 
-	d := cliwrapperadapter.NewWrapperDispatcherWithResolver(
+	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
 		cliwrapperadapter.WrapperConfig{},
 		rec.exec,
-		func() (ports.CLIWrapperSecurityGate, error) { return gate, nil },
+		cliwrapperadapter.WrapperResolvers{
+			Core:         stubCoreResolver(),
+			SecurityGate: func() (ports.CLIWrapperSecurityGate, error) { return gate, nil },
+		},
 	)
 	err := d.Dispatch(context.Background(), []string{"npm", "install", "lodash", "--allow-risk=high"})
 
@@ -162,10 +181,13 @@ func TestDispatcher_PackageGate_PostInstallBlocked(t *testing.T) {
 	gate := &stubSecurityGate{lockfileErr: blockErr}
 	rec := &execRecorder{}
 
-	d := cliwrapperadapter.NewWrapperDispatcherWithResolver(
+	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
 		cliwrapperadapter.WrapperConfig{},
 		rec.exec,
-		func() (ports.CLIWrapperSecurityGate, error) { return gate, nil },
+		cliwrapperadapter.WrapperResolvers{
+			Core:         stubCoreResolver(),
+			SecurityGate: func() (ports.CLIWrapperSecurityGate, error) { return gate, nil },
+		},
 	)
 	err := d.Dispatch(context.Background(), []string{"npm", "install", "lodash"})
 
@@ -182,7 +204,11 @@ func TestDispatcher_Passthrough(t *testing.T) {
 
 	rec := &execRecorder{}
 
-	d := cliwrapperadapter.NewWrapperDispatcher(cliwrapperadapter.WrapperConfig{}, rec.exec)
+	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
+		cliwrapperadapter.WrapperConfig{},
+		rec.exec,
+		cliwrapperadapter.WrapperResolvers{Core: stubCoreResolver()},
+	)
 	err := d.Dispatch(context.Background(), []string{"echo", "hello"})
 
 	require.NoError(t, err)
@@ -196,7 +222,11 @@ func TestDispatcher_ToolingChain(t *testing.T) {
 
 	rec := &execRecorder{}
 
-	d := cliwrapperadapter.NewWrapperDispatcher(cliwrapperadapter.WrapperConfig{}, rec.exec)
+	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
+		cliwrapperadapter.WrapperConfig{},
+		rec.exec,
+		cliwrapperadapter.WrapperResolvers{Core: stubCoreResolver()},
+	)
 	err := d.Dispatch(context.Background(), []string{"go", "build", "./...", "-then", "go", "test", "./..."})
 
 	require.NoError(t, err)
@@ -218,6 +248,7 @@ func TestDispatcher_MacroRun(t *testing.T) {
 		},
 		nil,
 		cliwrapperadapter.WrapperResolvers{
+			Core:        stubCoreResolver(),
 			MacroRunner: func() (ports.CLIWrapperMacroRunner, error) { return runner, nil },
 		},
 	)
@@ -238,6 +269,7 @@ func TestDispatcher_FormatHeaders(t *testing.T) {
 		cliwrapperadapter.WrapperConfig{},
 		nil,
 		cliwrapperadapter.WrapperResolvers{
+			Core:      stubCoreResolver(),
 			Formatter: func() (ports.CLIWrapperFormatter, error) { return formatter, nil },
 		},
 	)
@@ -258,7 +290,11 @@ func TestDispatcher_PolicycheckSeparation(t *testing.T) {
 
 	rec := &execRecorder{}
 
-	d := cliwrapperadapter.NewWrapperDispatcher(cliwrapperadapter.WrapperConfig{}, rec.exec)
+	d := cliwrapperadapter.NewWrapperDispatcherWithResolvers(
+		cliwrapperadapter.WrapperConfig{},
+		rec.exec,
+		cliwrapperadapter.WrapperResolvers{Core: stubCoreResolver()},
+	)
 	err := d.Dispatch(context.Background(), []string{"policycheck", "--policy-list"})
 
 	require.NoError(t, err)

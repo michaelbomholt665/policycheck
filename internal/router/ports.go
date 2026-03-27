@@ -29,4 +29,5 @@ const (
 	PortCLIWrapperSecurityGate PortName = "cli-wrapper-security"
 	PortCLIWrapperMacroRunner  PortName = "cli-wrapper-macro"
 	PortCLIWrapperFormatter    PortName = "cli-wrapper-format"
+	PortCLIWrapperCore         PortName = "cli-wrapper-core"
 )

@@ -1,11 +1,7 @@
 // internal/adapters/cliwrapper/extension.go
 package cliwrapper
 
-import (
-	"policycheck/internal/router"
-)
-
-var defaultSecurityConfig = DefaultWrapperConfig().Security
+import "policycheck/internal/router"
 
 // Extension implements router.Extension for the CLI wrapper subsystem.
 //
@@ -31,7 +27,7 @@ func (e *Extension) Provides() []router.PortName {
 
 // RouterProvideRegistration registers the real wrapper adapters for each subsystem port.
 func (e *Extension) RouterProvideRegistration(reg *router.Registry) error {
-	osvGate := NewOSVSecurityAdapter(defaultSecurityConfig)
+	osvGate := NewOSVSecurityAdapter(WrapperSecurityConfig{})
 	dispatcher := NewWrapperDispatcher(WrapperConfig{}, defaultExecFunc)
 	dispatcher.loadConfig = loadActiveDispatcherConfig
 

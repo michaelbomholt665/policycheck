@@ -13,14 +13,14 @@ Converge the wrapper config implementation onto the contract described in `polic
 
 ## Task Checklist
 
-- [ ] Replace `wrapper-gate.toml` repo discovery with `policy-gate.toml`.
-- [ ] Remove duplicate config-path discovery logic across wrapper packages.
-- [ ] Align wrapper config schema with the design doc.
-- [ ] Implement documented global + repo merge semantics.
-- [ ] Add `policycheck config` inspection commands.
-- [ ] Add `policycheck config init` scaffold commands.
-- [ ] Implement explicit `--allow-risk=<level>` handling in package-gate flow.
-- [ ] Add focused tests for config commands and risk override behaviour.
+- [x] Replace `wrapper-gate.toml` repo discovery with `policy-gate.toml`.
+- [x] Remove duplicate config-path discovery logic across wrapper packages.
+- [x] Align wrapper config schema with the design doc.
+- [x] Implement documented global + repo merge semantics.
+- [x] Add `policycheck config` inspection commands.
+- [x] Add `policycheck config init` scaffold commands.
+- [x] Implement explicit `--allow-risk=<level>` handling in package-gate flow.
+- [x] Add focused tests for config commands and risk override behaviour.
 
 ## Why This Phase Exists
 
@@ -56,15 +56,15 @@ This phase makes the config story coherent and user-facing.
 Summary: make `policy-gate.toml` the visible repo config file for the shared binary as described in the design doc.
 
 RED:
-- [ ] Write a failing test that wrapper config is found via upward search for `policy-gate.toml`.
-- [ ] Write a failing test that `wrapper-gate.toml` is not required for normal repo operation.
+- [x] Write a failing test that wrapper config is found via upward search for `policy-gate.toml`.
+- [x] Write a failing test that `wrapper-gate.toml` is not required for normal repo operation.
 
 GREEN:
-- [ ] Change repo config discovery to `policy-gate.toml`.
-- [ ] Remove duplicate repo-root search logic that disagrees across packages.
+- [x] Change repo config discovery to `policy-gate.toml`.
+- [x] Remove duplicate repo-root search logic that disagrees across packages.
 
 REFACTOR:
-- [ ] Centralize config-path resolution in one wrapper config path helper.
+- [x] Centralize config-path resolution in one wrapper config path helper.
 
 Acceptance checks:
 - Wrapper config resolution matches the design doc.
@@ -75,18 +75,18 @@ Acceptance checks:
 Summary: align the code with the design doc's global + repo layering model and stricter-only security rule.
 
 RED:
-- [ ] Add a failing test for global + repo merge by key.
-- [ ] Add a failing test that repo cannot relax global blocking policy.
-- [ ] Add a failing test for macro merge semantics.
-- [ ] Add a failing test for tooling gate merge semantics.
-- [ ] Add a failing test for unknown fields if the strictness contract requires it.
+- [x] Add a failing test for global + repo merge by key.
+- [x] Add a failing test that repo cannot relax global blocking policy.
+- [x] Add a failing test for macro merge semantics.
+- [x] Add a failing test for tooling gate merge semantics.
+- [x] Add a failing test for unknown fields if the strictness contract requires it.
 
 GREEN:
-- [ ] Replace or extend `block_threshold` with the documented security policy shape.
-- [ ] Implement the documented merge model for macros, tooling gates, and UI config.
+- [x] Replace or extend `block_threshold` with the documented security policy shape.
+- [x] Implement the documented merge model for macros, tooling gates, and UI config.
 
 REFACTOR:
-- [ ] Remove drift between core wrapper config and adapter-local config clones.
+- [x] Remove drift between core wrapper config and adapter-local config clones.
 
 Acceptance checks:
 - Config matches the design doc instead of an intermediate schema.
@@ -96,18 +96,18 @@ Acceptance checks:
 Summary: implement the missing user-facing control plane described by the design doc.
 
 RED:
-- [ ] Write a failing test for `policycheck config`.
-- [ ] Write a failing test for `policycheck config --global`.
-- [ ] Write a failing test for `policycheck config init`.
-- [ ] Write a failing test for `policycheck config init --global`.
-- [ ] Write a failing test for `--allow-risk=<level>` blocking/override behaviour.
+- [x] Write a failing test for `policycheck config`.
+- [x] Write a failing test for `policycheck config --global`.
+- [x] Write a failing test for `policycheck config init`.
+- [x] Write a failing test for `policycheck config init --global`.
+- [x] Write a failing test for `--allow-risk=<level>` blocking/override behaviour.
 
 GREEN:
-- [ ] Add config inspection and scaffold commands at the shared app layer.
-- [ ] Implement explicit risk override parsing and enforcement in wrapper package-gate flow.
+- [x] Add config inspection and scaffold commands at the shared app layer.
+- [x] Implement explicit risk override parsing and enforcement in wrapper package-gate flow.
 
 REFACTOR:
-- [ ] Keep config rendering and config mutation logic separate from execution adapters.
+- [x] Keep config rendering and config mutation logic separate from execution adapters.a
 
 Acceptance checks:
 - The config UX promised by the design doc exists.

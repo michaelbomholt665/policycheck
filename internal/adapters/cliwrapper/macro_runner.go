@@ -62,16 +62,12 @@ func loadActiveAdapterConfig() (WrapperConfig, error) {
 		return WrapperConfig{}, fmt.Errorf("get working directory: %w", err)
 	}
 
-	globalConfigPath, err := DefaultGlobalConfigPath()
+	coreProvider, err := resolveWrapperCore()
 	if err != nil {
-		return WrapperConfig{}, fmt.Errorf("resolve global wrapper config path: %w", err)
+		return WrapperConfig{}, fmt.Errorf("resolve wrapper core: %w", err)
 	}
 
-	loader := WrapperConfigLoader{
-		GlobalConfigPath: globalConfigPath,
-		StartDir:         workingDir,
-	}
-	result, err := loader.Load()
+	result, err := coreProvider.LoadActiveConfig(workingDir)
 	if err != nil {
 		return WrapperConfig{}, fmt.Errorf("load wrapper config: %w", err)
 	}

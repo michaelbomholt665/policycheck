@@ -1,0 +1,1014 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.root { padding: 1rem 0; font-family: var(--font-mono); }
+.tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.tab {
+  padding: 5px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;
+  border: 1px solid var(--color-border-primary); color: var(--color-text-secondary);
+  background: transparent; transition: all .15s;
+}
+.tab.active { background: var(--color-background-secondary); color: var(--color-text-primary); border-color: var(--color-border-secondary); }
+.lang { display: none; }
+.lang.active { display: block; }
+.group { margin-bottom: 20px; }
+.group-title {
+  font-size: 11px; font-weight: 500; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--color-text-tertiary); margin-bottom: 8px; padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-border-tertiary);
+}
+.smell {
+  border-radius: 6px; margin-bottom: 4px;
+  background: var(--color-background-secondary);
+  overflow: hidden;
+}
+.smell-header {
+  display: flex; gap: 10px; padding: 7px 8px;
+  font-size: 12.5px; line-height: 1.5; cursor: pointer;
+  transition: background .1s; user-select: none;
+}
+.smell-header:hover { background: var(--color-background-tertiary); }
+.badges { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; padding-top: 1px; }
+.badge {
+  font-size: 10px; font-weight: 500; padding: 1px 6px;
+  border-radius: 4px; letter-spacing: .04em; white-space: nowrap;
+}
+.sev-high { background: #FCEBEB; color: #791F1F; }
+.sev-med  { background: #FAEEDA; color: #633806; }
+.sev-low  { background: #EAF3DE; color: #27500A; }
+.tag-rare { background: #EEEDFE; color: #3C3489; }
+@media (prefers-color-scheme: dark) {
+  .sev-high { background: #501313; color: #F09595; }
+  .sev-med  { background: #412402; color: #FAC775; }
+  .sev-low  { background: #173404; color: #C0DD97; }
+  .tag-rare { background: #26215C; color: #AFA9EC; }
+}
+.smell-main { flex: 1; min-width: 0; }
+.smell-name { color: var(--color-text-primary); font-weight: 500; }
+.smell-desc { color: var(--color-text-secondary); font-size: 12px; margin-top: 1px; }
+.expand-icon {
+  flex-shrink: 0; font-size: 11px; color: var(--color-text-tertiary);
+  align-self: center; transition: transform .2s; margin-left: 4px;
+}
+.smell.open .expand-icon { transform: rotate(90deg); }
+.smell-alt {
+  display: none; padding: 0 10px 10px 10px;
+  border-top: 1px solid var(--color-border-tertiary);
+}
+.smell.open .smell-alt { display: block; }
+.alt-label {
+  font-size: 10px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--color-text-tertiary); margin-bottom: 5px; margin-top: 8px;
+}
+.alt-block {
+  background: var(--color-background-tertiary);
+  border-radius: 5px; padding: 7px 9px; font-size: 12px;
+  color: var(--color-text-secondary); line-height: 1.6;
+}
+code {
+  font-family: var(--font-mono); font-size: 11.5px;
+  background: var(--color-background-tertiary); padding: 1px 4px; border-radius: 3px;
+}
+.smell-alt code { background: var(--color-background-secondary); }
+.filter-bar { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; flex-wrap: wrap; }
+.filter-btn {
+  font-size: 11px; padding: 2px 8px; border-radius: 20px; cursor: pointer;
+  border: 1px solid var(--color-border-secondary); background: transparent;
+  color: var(--color-text-tertiary); transition: all .15s;
+}
+.filter-btn.on { background: var(--color-background-secondary); color: var(--color-text-primary); }
+.count-label { font-size: 11px; color: var(--color-text-tertiary); margin-left: auto; }
+.hint { font-size: 11px; color: var(--color-text-tertiary); margin-bottom: 12px; }
+</style>
+
+<div class="root">
+  <div class="tabs">
+    <button class="tab active" onclick="switchLang('go', this)">Go</button>
+    <button class="tab" onclick="switchLang('py', this)">Python</button>
+    <button class="tab" onclick="switchLang('ts', this)">TypeScript</button>
+  </div>
+  <div class="filter-bar">
+    <button class="filter-btn on" data-filter="HIGH" onclick="toggleFilter(this)">● High</button>
+    <button class="filter-btn on" data-filter="MED"  onclick="toggleFilter(this)">● Med</button>
+    <button class="filter-btn on" data-filter="LOW"  onclick="toggleFilter(this)">● Low</button>
+    <button class="filter-btn on" data-filter="RARE" onclick="toggleFilter(this)">◆ Obscure</button>
+    <span class="count-label" id="count-label"></span>
+  </div>
+  <div class="hint">Click any smell to see the alternative.</div>
+
+  <!-- ═══════════ GO ═══════════ -->
+  <div id="go" class="lang active">
+
+    <div class="group">
+      <div class="group-title">Error handling</div>
+
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Silent error discard</div><div class="smell-desc"><code>if err != nil { return }</code> with no logging or wrapping — caller gets zero context</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Return a wrapped error: <code>return fmt.Errorf("operationName: %w", err)</code>. For non-critical paths, log at the point of discard with enough context to reconstruct what happened.</div></div>
+      </div>
+
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Blank-identifier swallow</div><div class="smell-desc"><code>result, _ := someCall()</code> — error silently discarded</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Always assign the error: <code>result, err := someCall()</code> then handle it. If you genuinely cannot act on it, at minimum <code>_ = err</code> with a comment explaining why — but that should be extremely rare.</div></div>
+      </div>
+
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">Unwrapped error return</div><div class="smell-desc">Returning raw <code>err</code> — stack context lost</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use <code>fmt.Errorf("context: %w", err)</code> so callers can still use <code>errors.Is</code> / <code>errors.As</code> on the chain. For richer structured errors, define a domain error type and wrap it.</div></div>
+      </div>
+
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">Panic in library code</div><div class="smell-desc"><code>panic()</code> outside of <code>main</code>/<code>init</code></div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Return an error value instead. Reserve <code>panic</code> for programmer errors that represent an impossible state (e.g. index out of range in internal logic). If you must panic, document it clearly in the package godoc.</div></div>
+      </div>
+
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Sentinel error compared with ==</div><div class="smell-desc"><code>== io.EOF</code> instead of <code>errors.Is()</code> — fails after wrapping</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Always use <code>errors.Is(err, io.EOF)</code>. It unwraps the chain automatically, so it works regardless of how many layers of <code>%w</code> wrapping sit between your code and the original sentinel.</div></div>
+      </div>
+
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">errors.As target not a pointer</div><div class="smell-desc"><code>errors.As(err, myErr)</code> — silently never matches</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Pass a pointer to the target: <code>var target *MyError; errors.As(err, &target)</code>. The function signature accepts <code>any</code> so the compiler won't catch the missing <code>&</code> — a linter rule or unit test is the only reliable guard.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Concurrency</div>
+
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Goroutine leak</div><div class="smell-desc">Goroutine launched with no cancellation path</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Pass a <code>context.Context</code> into every goroutine and select on <code>ctx.Done()</code> as an exit path. For worker pools, use a <code>sync.WaitGroup</code> and close a done channel to signal shutdown. Tools like <code>goleak</code> can catch leaks in tests.</div></div>
+      </div>
+
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Unlocked shared state</div><div class="smell-desc">Struct fields mutated across goroutines without mutex or atomic</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Protect with a <code>sync.Mutex</code> or use <code>sync/atomic</code> for scalar values. For read-heavy workloads, prefer <code>sync.RWMutex</code>. Run tests with <code>-race</code> — the Go race detector catches almost all of these at test time.</div></div>
+      </div>
+
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">Mutex-protected map with value copy</div><div class="smell-desc">Modifying a struct copy retrieved from a map outside the lock</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Store pointers in the map (<code>map[K]*V</code>) so you're mutating the actual value. Or do the full read-modify-write inside the lock. Never let a copy escape the critical section.</div></div>
+      </div>
+
+      <div class="smell" data-sev="HIGH" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Loop variable capture in goroutine</div><div class="smell-desc"><code>go func() { use(i) }()</code> without shadowing — all goroutines see final value (pre-Go 1.22)</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Shadow the variable before the goroutine: <code>i := i; go func() { use(i) }()</code>. Or pass it as a parameter: <code>go func(i int) { use(i) }(i)</code>. Go 1.22+ fixes loop variable semantics, but your checker should still flag this for older targets.</div></div>
+      </div>
+
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">WaitGroup counter goes negative</div><div class="smell-desc"><code>wg.Done()</code> called more times than <code>wg.Add()</code></div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Call <code>wg.Add(n)</code> before spawning goroutines, not inside them. Use <code>defer wg.Done()</code> as the first line of the goroutine body to guarantee it fires exactly once even on panic paths.</div></div>
+      </div>
+
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Channel send to nil channel</div><div class="smell-desc">Sending to a <code>var ch chan T</code> (nil) — blocks forever</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Always initialise channels with <code>make(chan T)</code> before use. If a channel is conditionally used, guard sends with a nil check or use a select with a default case to avoid blocking.</div></div>
+      </div>
+
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">sync.Mutex copied by value</div><div class="smell-desc">Passing a struct containing a <code>sync.Mutex</code> by value</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Always pass structs containing mutexes by pointer. The <code>go vet</code> tool and <code>staticcheck</code> both flag this — ensure your CI runs them.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">SQL / Injection</div>
+
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">String-concatenated query</div><div class="smell-desc"><code>fmt.Sprintf("SELECT ... WHERE id='%s'", input)</code></div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use parameterised placeholders: <code>db.QueryContext(ctx, "SELECT ... WHERE id = ?", id)</code>. The driver handles escaping. For complex queries, consider <code>sqlx</code> named params or a query builder like <code>squirrel</code>.</div></div>
+      </div>
+
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">Rows never closed</div><div class="smell-desc"><code>db.Query()</code> without deferred <code>rows.Close()</code></div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Add <code>defer rows.Close()</code> immediately after the nil-error check. Also check <code>rows.Err()</code> after the iteration loop — errors during scanning are only reported there.</div></div>
+      </div>
+
+      <div class="smell" data-sev="HIGH" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Dynamic ORDER BY / table name</div><div class="smell-desc">Column/table names can't use parameterised placeholders</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Validate against a strict allowlist of known column names before interpolating: <code>allowed := map[string]bool{"name": true, "created_at": true}</code>. Reject anything not in the map. Never trust user input directly for identifiers.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Resource management</div>
+
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Deferred close inside loop</div><div class="smell-desc"><code>defer f.Close()</code> inside a loop — queues until function exit</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Extract the loop body into a helper function and defer inside that: <code>func process(path string) error { f, _ := os.Open(path); defer f.Close(); ... }</code>. Or close explicitly at the end of each iteration without defer.</div></div>
+      </div>
+
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">Context ignored</div><div class="smell-desc">Function accepts <code>ctx</code> but never passes it to I/O calls</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Pass <code>ctx</code> to every I/O call that accepts it: <code>db.QueryContext(ctx, ...)</code>, <code>http.NewRequestWithContext(ctx, ...)</code>. If a dependency doesn't accept context, wrap it with a goroutine and a select on <code>ctx.Done()</code>.</div></div>
+      </div>
+
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">http.Response body not drained</div><div class="smell-desc">Closing body without reading it — prevents connection reuse</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Before closing, drain the body: <code>io.Copy(io.Discard, resp.Body)</code>. This allows the underlying TCP connection to be returned to the pool. Pair with <code>defer resp.Body.Close()</code> as usual.</div></div>
+      </div>
+
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">time.After in hot loop</div><div class="smell-desc">Allocates a new timer channel each call — leaks until fired</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use <code>t := time.NewTimer(d)</code> and <code>defer t.Stop()</code>, then reuse with <code>t.Reset(d)</code> on each iteration. This avoids the allocation overhead and the goroutine leak associated with abandoned <code>time.After</code> channels.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Type / interface</div>
+
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">Interface holding nil pointer</div><div class="smell-desc">Typed nil assigned to interface — <code>if x == nil</code> check silently fails</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Return a bare <code>nil</code> (untyped) when the interface should be nil: <code>var err error = nil; return err</code> is fine, but <code>var p *MyError = nil; return p</code> as an <code>error</code> is not. Use <code>reflect.ValueOf(v).IsNil()</code> if you must check dynamically.</div></div>
+      </div>
+
+      <div class="smell" data-sev="LOW" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span></div>
+          <div class="smell-main"><div class="smell-name">Over-broad any parameter</div><div class="smell-desc">Accepting <code>any</code> instead of a narrow interface</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Define the smallest interface that satisfies your needs: <code>type Namer interface { Name() string }</code>. If multiple types are legitimately needed, use a union via generics: <code>func F[T int | string](v T)</code>.</div></div>
+      </div>
+
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Slice header escape</div><div class="smell-desc">Returning a sub-slice keeps the full backing array alive</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Copy the sub-slice into a fresh allocation: <code>result := make([]T, len(sub)); copy(result, sub)</code>. The original large backing array can then be GC'd.</div></div>
+      </div>
+
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">append result discarded</div><div class="smell-desc"><code>append(slice, val)</code> without reassigning</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Always reassign: <code>slice = append(slice, val)</code>. This is one of the easiest AST-level checks to implement — any <code>append</code> call whose return value is not assigned is the smell.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Performance</div>
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">strings.Builder copied by value</div><div class="smell-desc">Copying a <code>strings.Builder</code> after first write</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Always pass <code>*strings.Builder</code> by pointer. The type has a <code>copyCheck</code> mechanism that panics on copy after first use — but only at runtime, not compile time. Pass by pointer from the start.</div></div>
+      </div>
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Large struct in map value</div><div class="smell-desc">Map values not addressable — every write copies the full struct</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use <code>map[K]*V</code> so only the pointer is stored and copied. The threshold is subjective, but any struct over ~64 bytes or with heap-allocated fields (slices, maps, strings) is a candidate.</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════ PYTHON ═══════════ -->
+  <div id="py" class="lang">
+
+    <div class="group">
+      <div class="group-title">Exception handling</div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Bare except</div><div class="smell-desc"><code>except:</code> catches everything including <code>SystemExit</code>, <code>KeyboardInterrupt</code></div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Catch the most specific exception type you can handle: <code>except ValueError as e:</code>. If you need a broad catch-all, use <code>except Exception as e:</code> which excludes system-exiting exceptions, and always log or re-raise.</div></div>
+      </div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Silent swallow</div><div class="smell-desc"><code>except ...: pass</code> — error consumed with no log or re-raise</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">At minimum: <code>except SomeError: logger.warning("...", exc_info=True)</code>. If suppression is intentional, add a comment. <code>contextlib.suppress(ErrorType)</code> is an explicit, readable way to intentionally swallow a known exception type.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">Raising generic Exception</div><div class="smell-desc"><code>raise Exception("...")</code> — callers can't catch by type</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Define domain-specific exception classes: <code>class ValidationError(ValueError): ...</code>. Callers can then write <code>except ValidationError</code> without catching unrelated errors.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Exception chaining lost</div><div class="smell-desc"><code>raise NewError() from None</code> discards the original traceback</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use implicit chaining (<code>raise NewError()</code> inside an except block) or explicit chaining (<code>raise NewError() from original_exc</code>) to preserve the full traceback. Only use <code>from None</code> when you're deliberately hiding implementation details at an API boundary.</div></div>
+      </div>
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Re-raising wrong exception</div><div class="smell-desc"><code>except ValueError: raise TypeError()</code> without <code>from e</code></div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Preserve the original: <code>except ValueError as e: raise TypeError("...") from e</code>. The <code>from e</code> sets <code>__cause__</code> so the full chain appears in tracebacks.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">SQL / Injection</div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">f-string / %-format query</div><div class="smell-desc"><code>cursor.execute(f"SELECT ... WHERE id='{uid}'")</code></div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use parameterised queries: <code>cursor.execute("SELECT ... WHERE id = %s", (uid,))</code>. The DB-API driver handles escaping. For ORMs like SQLAlchemy, use bound parameters or the ORM query API — never <code>text()</code> with string formatting.</div></div>
+      </div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Shell injection via subprocess</div><div class="smell-desc"><code>subprocess.run(cmd, shell=True)</code> with user input</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Pass a list instead of a string and drop <code>shell=True</code>: <code>subprocess.run(["git", "clone", user_url])</code>. The OS handles argument separation safely. If you need shell features, use <code>shlex.quote()</code> on each user-supplied token.</div></div>
+      </div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">eval / exec on external input</div><div class="smell-desc"><code>eval(user_input)</code> — arbitrary code execution</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">For config/data: use <code>json.loads()</code>, <code>ast.literal_eval()</code> (safe subset of Python literals only), or a schema validator like Pydantic. For dynamic dispatch: use a dispatch table (<code>dict</code> of callables) keyed by string.</div></div>
+      </div>
+      <div class="smell" data-sev="HIGH" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">pickle.loads on untrusted data</div><div class="smell-desc">Deserialising pickle bytes executes embedded bytecode — RCE</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use a format that can't execute code: JSON, MessagePack, or Protocol Buffers. If pickle is required for internal caching, sign the payload with <code>hmac</code> and verify before loading. Never load pickle from a network or user-supplied source.</div></div>
+      </div>
+      <div class="smell" data-sev="HIGH" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">yaml.load without Loader</div><div class="smell-desc"><code>yaml.load(data)</code> — can instantiate arbitrary Python objects</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Always pass a safe loader: <code>yaml.safe_load(data)</code> or <code>yaml.load(data, Loader=yaml.SafeLoader)</code>. The safe loader only handles standard YAML types and cannot instantiate Python objects.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Dynamic ORDER BY / table name</div><div class="smell-desc">Column/table names can't use parameterised placeholders</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Validate against an allowlist: <code>ALLOWED_COLS = {"name", "created_at"}; assert col in ALLOWED_COLS</code>. Use <code>psycopg2.sql.Identifier</code> for safe identifier quoting in PostgreSQL contexts.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Mutability traps</div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Mutable default argument</div><div class="smell-desc"><code>def f(items=[])</code> — list shared across all calls</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use <code>None</code> as the sentinel and create the default inside the function: <code>def f(items=None): items = items if items is not None else []</code>. This is idiomatic Python and avoids the shared-state issue entirely.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">Late-binding closure</div><div class="smell-desc">Lambda in a loop captures loop variable by reference</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Capture by value using a default argument: <code>lambda x=x: use(x)</code>. Or use a factory function: <code>def make_handler(x): return lambda: use(x)</code>. Both force evaluation at definition time.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Class-level mutable attribute</div><div class="smell-desc"><code>class Foo: items = []</code> — shared across all instances</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Move mutable state into <code>__init__</code>: <code>def __init__(self): self.items = []</code>. Class-level attributes are fine for immutable constants and class-wide configuration, not for per-instance mutable state.</div></div>
+      </div>
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Aliased list/dict not copied</div><div class="smell-desc"><code>b = a</code> — mutations through <code>b</code> affect <code>a</code></div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Shallow copy: <code>b = a.copy()</code> or <code>b = list(a)</code>. Deep copy when nested structures are involved: <code>import copy; b = copy.deepcopy(a)</code>. For read-only access, consider typing the parameter as <code>Sequence</code> to make intent explicit.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Type / safety</div>
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">Implicit None return used as value</div><div class="smell-desc">Function sometimes returns a value, sometimes falls off the end</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Be explicit about the return type. If the function can return nothing, annotate it as <code>Optional[T]</code> (or <code>T | None</code>) and add a deliberate <code>return None</code> at every exit point. Mypy with <code>--strict</code> will flag inconsistent return paths.</div></div>
+      </div>
+      <div class="smell" data-sev="LOW" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span></div>
+          <div class="smell-main"><div class="smell-name">Missing type annotations on public API</div><div class="smell-desc">Public functions without hints — no static analysis</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Add annotations incrementally. Start with public-facing functions, then work inward. Enable <code>mypy</code> or <code>pyright</code> in CI. Even partial annotations catch a significant class of bugs without requiring a full rewrite.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">isinstance with list literal</div><div class="smell-desc"><code>isinstance(x, [str, bytes])</code> — raises TypeError at runtime</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use a tuple: <code>isinstance(x, (str, bytes))</code>. The second argument must be a type or a tuple of types — lists are not accepted and will raise <code>TypeError</code> at the call site.</div></div>
+      </div>
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Comparison to True/False with ==</div><div class="smell-desc"><code>if x == True</code> — coercion-prone</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use <code>if x:</code> for truthiness checks or <code>if x is True:</code> for strict boolean identity. PEP 8 explicitly discourages <code>== True</code>/<code>== False</code> comparisons. Flake8 rule E712 flags this.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Resource management</div>
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">File / connection not context-managed</div><div class="smell-desc">Opening files or DB connections outside a <code>with</code> block</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Always use <code>with open(...) as f:</code> and <code>with db.connect() as conn:</code>. If a class doesn't implement the context manager protocol, wrap it with <code>contextlib.closing()</code>.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Generator not fully consumed</div><div class="smell-desc">Generator wrapping a resource abandoned mid-iteration</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use <code>contextlib.contextmanager</code> with try/finally to ensure cleanup runs even if the caller breaks early. Or use <code>with</code>-style generators via <code>@contextlib.contextmanager</code> so the resource is tied to a context manager, not the generator's lifetime.</div></div>
+      </div>
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">threading.Lock not released on exception</div><div class="smell-desc">Manual acquire/release without a <code>with</code> block</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use the lock as a context manager: <code>with lock: ...</code>. This guarantees release even if an exception is raised inside the block.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Import / module</div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Circular import</div><div class="smell-desc">Module A imports B which imports A — partial initialisation</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Break the cycle by moving shared types into a third module that neither A nor B imports. For unavoidable cases, use a local import inside the function body to defer resolution until call time.</div></div>
+      </div>
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Star import in non-init code</div><div class="smell-desc"><code>from module import *</code> — namespace pollution</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Import only what you use: <code>from module import ClassA, func_b</code>. Star imports are acceptable in <code>__init__.py</code> for re-exporting a public API, but should be controlled with an explicit <code>__all__</code> list in the source module.</div></div>
+      </div>
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Module-level side effects</div><div class="smell-desc">I/O or heavy computation at import time</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Move side-effectful logic into functions or a <code>main()</code> entrypoint guarded by <code>if __name__ == "__main__":</code>. For expensive initialisation, use lazy loading patterns or module-level <code>__getattr__</code>.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Async</div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Blocking call inside async function</div><div class="smell-desc"><code>time.sleep()</code> or <code>requests.get()</code> in <code>async def</code></div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use async equivalents: <code>await asyncio.sleep()</code>, <code>httpx.AsyncClient</code>, <code>aiofiles</code>. For blocking work that can't be replaced, offload with <code>await asyncio.get_event_loop().run_in_executor(None, blocking_fn)</code>.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Unawaited coroutine</div><div class="smell-desc">Calling <code>async def</code> without <code>await</code> — returns coroutine object, does nothing</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Always <code>await</code> coroutines or schedule them with <code>asyncio.create_task()</code>. Python 3.11+ emits a <code>RuntimeWarning</code> for unawaited coroutines. Enable warnings-as-errors in tests to catch these early.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">asyncio.get_event_loop() in production</div><div class="smell-desc">Deprecated — creates a new loop if none running</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use <code>asyncio.get_running_loop()</code> inside async code (raises if no loop is running, which is the correct behaviour). For entrypoints, use <code>asyncio.run(main())</code> which manages the loop lifecycle cleanly.</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════ TYPESCRIPT ═══════════ -->
+  <div id="ts" class="lang">
+
+    <div class="group">
+      <div class="group-title">Type system abuse</div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Unguarded non-null assertion</div><div class="smell-desc"><code>obj!.property</code> when obj can genuinely be null</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use optional chaining: <code>obj?.property</code>. If null is truly impossible at that point, add a guard that throws a meaningful error: <code>if (!obj) throw new Error("obj must exist")</code>. Reserve <code>!</code> for cases where you've verified non-null just above.</div></div>
+      </div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">any escape hatch</div><div class="smell-desc"><code>as any</code> to silence type errors</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use <code>unknown</code> instead of <code>any</code> for genuinely unknown input — it forces you to narrow the type before use. For library interop, use precise overrides or augment the type definition rather than casting to <code>any</code>.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">Unsafe type assertion</div><div class="smell-desc"><code>data as SomeType</code> without runtime validation</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Validate at the boundary with a schema library: <code>zod</code>, <code>valibot</code>, or <code>io-ts</code>. These parse and validate simultaneously, giving you a typed value only if the shape actually matches.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Enum used as bitwise flags</div><div class="smell-desc">Numeric enums combined with <code>|</code> — TS doesn't model this</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use a const object with explicit bit values and a union type: <code>const Flags = { Read: 1, Write: 2 } as const; type Flag = typeof Flags[keyof typeof Flags]</code>. Or use a <code>Set&lt;FlagEnum&gt;</code> which is more idiomatic and type-safe in TS.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Widening via object literal spread</div><div class="smell-desc"><code>{ ...typedValue, extra: 1 }</code> disables excess property checking</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Explicitly type the result: <code>const result: MyType = { ...typedValue, extra: 1 }</code> — TS will then validate the shape. Or define an extended type: <code>type Extended = MyType & { extra: number }</code>.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Overlapping overload signatures</div><div class="smell-desc">Overloads that overlap — wrong overload selected silently</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Order overloads from most specific to least specific. Use discriminated unions instead of overloads where possible — they're easier to narrow and don't have ordering issues.</div></div>
+      </div>
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Mutable tuple typed as array</div><div class="smell-desc"><code>[string, number]</code> widened to <code>Array&lt;string | number&gt;</code></div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use <code>as const</code> to preserve tuple structure: <code>const pair = ["a", 1] as const</code>. Or annotate the type explicitly: <code>const pair: [string, number] = ["a", 1]</code>. This preserves positional types and prevents wrong-order access.</div></div>
+      </div>
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Namespace merging side-effect</div><div class="smell-desc">Unintentional global namespace augmentation</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Isolate augmentations in a dedicated <code>.d.ts</code> file and import it only where needed. Add <code>export {}</code> at the top of any file doing <code>declare global</code> to ensure it's treated as a module, not a script.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Async / promises</div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Floating promise</div><div class="smell-desc">Async call without <code>await</code> or <code>.catch()</code></div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Always <code>await</code> or chain <code>.catch()</code>. If fire-and-forget is intentional, be explicit: <code>void someAsync()</code>. ESLint rule <code>@typescript-eslint/no-floating-promises</code> catches these automatically.</div></div>
+      </div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Empty catch block</div><div class="smell-desc"><code>catch { }</code> — exception silently swallowed</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">At minimum log: <code>catch (e) { console.error("context", e); }</code>. For expected errors, narrow the type and handle specifically. Use a top-level error boundary or <code>process.on('uncaughtException')</code> as a last-resort safety net, not a replacement.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">Sequential awaits in a loop</div><div class="smell-desc"><code>for (const x of list) { await fetch(x) }</code> — runs serially</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use <code>await Promise.all(list.map(x => fetch(x)))</code> for full parallelism. For concurrency-limited batching, use a library like <code>p-limit</code> or chunk manually with <code>Promise.all</code> over slices.</div></div>
+      </div>
+      <div class="smell" data-sev="HIGH" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">async function in Array.forEach</div><div class="smell-desc"><code>items.forEach(async item => { await ... })</code> — promises ignored</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Replace with <code>await Promise.all(items.map(async item => { ... }))</code>. The <code>map</code> collects the promises; <code>Promise.all</code> awaits them. Alternatively use a <code>for...of</code> loop with <code>await</code> if serial execution is needed.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Promise constructor anti-pattern</div><div class="smell-desc"><code>new Promise(async (res, rej) => { ... })</code> — thrown errors not caught</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use an <code>async</code> function directly and <code>await</code> it. Only use <code>new Promise()</code> to wrap callback-based APIs (<code>promisify</code> pattern), and never with an async executor. If you must, wrap the entire body in a try/catch and call <code>rej(e)</code> in the catch.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Unhandled rejection in Promise.all</div><div class="smell-desc">First rejection kills all — others silently abandoned</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use <code>Promise.allSettled()</code> to collect all results regardless of rejection — then inspect each result's <code>status</code>. Or wrap individual promises with <code>.catch()</code> before passing them to <code>Promise.all</code> if partial failure is acceptable.</div></div>
+      </div>
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Mixed .then() and async/await</div><div class="smell-desc">Inconsistent error propagation</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Pick one style per function and stay consistent. Prefer <code>async/await</code> for readability. Reserve <code>.then()</code> chaining for cases where you're deliberately building a pipeline and don't need the surrounding function to be async.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">SQL / Injection</div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Template-literal query</div><div class="smell-desc"><code>db.query(`SELECT ... WHERE id='${id}'`)</code></div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use driver parameterisation: <code>db.query("SELECT ... WHERE id = $1", [id])</code> for pg, or <code>db.execute(sql`SELECT ... WHERE id = ${id}`)</code> with tagged template literal libraries like <code>slonik</code> or <code>postgres.js</code> that handle escaping internally.</div></div>
+      </div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">innerHTML with user input</div><div class="smell-desc"><code>element.innerHTML = userInput</code> — XSS</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">For plain text: use <code>element.textContent = userInput</code>. For rich content you must render as HTML: sanitise first with <code>DOMPurify.sanitize(userInput)</code> before assigning to <code>innerHTML</code>.</div></div>
+      </div>
+      <div class="smell" data-sev="HIGH" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Dynamic ORDER BY in ORM</div><div class="smell-desc">Column names passed to ORM sort methods without allowlist</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Validate against a typed allowlist: <code>const SORTABLE = ["name", "createdAt"] as const; type SortCol = typeof SORTABLE[number]</code>. Check membership before passing to the ORM. The type system helps but doesn't replace the runtime check for externally-sourced values.</div></div>
+      </div>
+      <div class="smell" data-sev="HIGH" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Prototype pollution via merge</div><div class="smell-desc">Deep-merging user JSON can set <code>__proto__</code> — poisons Object prototype</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use a merge library with prototype pollution protection (<code>lodash.merge</code> has had fixes; prefer <code>deepmerge</code> with the <code>isMergeableObject</code> option). Or use <code>JSON.parse(JSON.stringify(obj))</code> as a safe but blunt deep-clone. Validate input with a schema before merging.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">eval / Function constructor</div><div class="smell-desc"><code>new Function(userInput)()</code> — arbitrary code execution</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use a dispatch table for dynamic behaviour: <code>const handlers: Record&lt;string, () => void&gt; = { greet: () => ... }</code>. For safe expression evaluation, use a sandboxed math library like <code>mathjs</code> rather than <code>eval</code>.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Equality / coercion</div>
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">Loose equality</div><div class="smell-desc"><code>==</code> instead of <code>===</code></div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Always use <code>===</code> and <code>!==</code>. The only defensible use of <code>==</code> is <code>x == null</code> as a shorthand for <code>x === null || x === undefined</code> — and even then, be explicit if the code is read by a team.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">typeof on complex types</div><div class="smell-desc"><code>typeof obj === "object"</code> also matches <code>null</code> and arrays</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Write a proper type guard: <code>function isMyType(v: unknown): v is MyType { return v !== null && typeof v === "object" && "field" in v }</code>. This narrows correctly and is self-documenting.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">NaN comparison</div><div class="smell-desc"><code>x === NaN</code> always false</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use <code>Number.isNaN(x)</code> for strict NaN checks (doesn't coerce). Avoid the global <code>isNaN()</code> which coerces strings first: <code>isNaN("hello")</code> returns <code>true</code>, <code>Number.isNaN("hello")</code> returns <code>false</code>.</div></div>
+      </div>
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Object spread overwrite</div><div class="smell-desc"><code>{ ...defaults, ...userInput }</code> with unvalidated input</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Validate <code>userInput</code> with a schema (zod, valibot) before merging, or pick only the keys you expect: <code>const safe = { ...defaults, name: userInput.name }</code>. Explicit is safer than spreading an unknown shape.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">React / DOM</div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">dangerouslySetInnerHTML with user data</div><div class="smell-desc">Unsanitised content — XSS</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Sanitise with DOMPurify: <code>dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }}</code>. Better yet, use a Markdown renderer like <code>react-markdown</code> that never uses <code>innerHTML</code> directly.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">Missing dependency in useEffect</div><div class="smell-desc">Stale closure — effect captures old variable values</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Include all values read inside the effect in the dependency array. Use the <code>eslint-plugin-react-hooks</code> exhaustive-deps rule — it catches these automatically. For values that change on every render but shouldn't retrigger the effect, use <code>useRef</code>.</div></div>
+      </div>
+      <div class="smell" data-sev="HIGH" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">State mutation without setState</div><div class="smell-desc">Directly mutating state — React doesn't detect the change</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Always return a new reference: <code>setState(prev => [...prev, newItem])</code> for arrays, <code>setState(prev => ({ ...prev, key: val }))</code> for objects. Consider <code>immer</code> via <code>useImmer</code> for complex nested state — it lets you write mutating syntax while producing immutable updates.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">useEffect with async function directly</div><div class="smell-desc"><code>useEffect(async () => ...)</code> — cleanup never runs</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Define the async function inside the effect and call it immediately: <code>useEffect(() => { async function load() { ... } load(); return () => { /* cleanup */ }; }, [deps])</code>. The outer function remains synchronous and can return a cleanup.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Unstable object/function as prop</div><div class="smell-desc">Inline <code>{}</code> or <code>() =&gt;</code> breaks memoised child</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Stabilise with <code>useMemo</code> for objects: <code>const opts = useMemo(() => ({ x: 1 }), [])</code> and <code>useCallback</code> for functions: <code>const handler = useCallback(() => ..., [deps])</code>. Only needed when the child is wrapped in <code>React.memo</code>.</div></div>
+      </div>
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Index as React key</div><div class="smell-desc"><code>key={index}</code> in a sorted/filtered list</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use a stable unique identifier from the data: <code>key={item.id}</code>. Index-as-key is only safe for purely static lists that never reorder, filter, or change length. If those conditions aren't guaranteed, a bad key will cause subtle input and animation bugs.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Runtime / JS gotchas</div>
+      <div class="smell" data-sev="MED" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span></div>
+          <div class="smell-main"><div class="smell-name">parseInt without radix</div><div class="smell-desc"><code>parseInt("09")</code> without explicit base</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Always pass the radix: <code>parseInt("09", 10)</code>. For numeric strings without fractions, <code>Number("09")</code> is often cleaner and doesn't have the radix issue. <code>+str</code> coercion also works but is less readable.</div></div>
+      </div>
+      <div class="smell" data-sev="HIGH" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Floating-point currency arithmetic</div><div class="smell-desc"><code>0.1 + 0.2 !== 0.3</code> in financial logic</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Store and operate on integer cents/pence: <code>const total = priceInCents + taxInCents</code>. For complex financial calculations, use a decimal library like <code>decimal.js</code> or <code>dinero.js</code>. Never use native floats for money.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">delete on object property</div><div class="smell-desc"><code>delete obj.key</code> de-optimises V8 hidden class</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Reconstruct without the key: <code>const { key, ...rest } = obj</code>. Or set to <code>undefined</code> if the property must remain in the shape. Both preserve the object's hidden class and avoid the V8 de-optimisation.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">for...in on an array</div><div class="smell-desc">Iterates enumerable string keys including prototype additions</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use <code>for...of</code> for values, <code>arr.forEach()</code>, or a plain indexed loop. Reserve <code>for...in</code> strictly for plain objects where you want to iterate own enumerable keys — even then, guard with <code>hasOwnProperty</code>.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">setTimeout reference lost</div><div class="smell-desc">Timer started without storing handle — can't be cleared</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Store the return value: <code>const timerId = setTimeout(...)</code> and clear on cleanup: <code>clearTimeout(timerId)</code>. In React, store in a <code>useRef</code> and clear in the <code>useEffect</code> cleanup function.</div></div>
+      </div>
+      <div class="smell" data-sev="LOW" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-low">LOW</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">typeof check before optional chaining</div><div class="smell-desc"><code>typeof obj !== 'undefined' && obj.x</code> — redundant</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use optional chaining: <code>obj?.x</code>. It handles both <code>null</code> and <code>undefined</code> and is shorter. The <code>typeof</code> guard is only needed in environments where accessing an undeclared variable would throw — which is rare in module-based TS.</div></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Node.js specific</div>
+      <div class="smell" data-sev="HIGH" data-rare="0">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span></div>
+          <div class="smell-main"><div class="smell-name">Unhandled promise rejection (Node)</div><div class="smell-desc">No <code>process.on('unhandledRejection')</code> handler — Node 15+ crashes</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Add a global handler at startup: <code>process.on('unhandledRejection', (reason) => { logger.error(reason); process.exit(1); })</code>. This is a last resort — the real fix is ensuring every promise has a <code>.catch()</code> or <code>try/await</code> at the call site.</div></div>
+      </div>
+      <div class="smell" data-sev="HIGH" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-high">HIGH</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Path traversal via user input</div><div class="smell-desc"><code>fs.readFile(userInput)</code> — reads arbitrary files</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Resolve and validate the path: <code>const resolved = path.resolve(BASE_DIR, userInput); if (!resolved.startsWith(BASE_DIR)) throw new Error("Forbidden")</code>. Never concatenate user input into paths without this check.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">Synchronous fs in async server</div><div class="smell-desc"><code>fs.readFileSync()</code> in a request handler — blocks event loop</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Use <code>await fs.promises.readFile()</code> or the <code>fs/promises</code> module. If startup-time synchronous reads are acceptable (loading config once), confine them to the initialisation path before the server starts accepting requests.</div></div>
+      </div>
+      <div class="smell" data-sev="MED" data-rare="1">
+        <div class="smell-header" onclick="toggle(this)">
+          <div class="badges"><span class="badge sev-med">MED</span><span class="badge tag-rare">OBSCURE</span></div>
+          <div class="smell-main"><div class="smell-name">require() inside a hot path</div><div class="smell-desc">Dynamic <code>require()</code> in frequently-called code — slow on first hit</div></div>
+          <span class="expand-icon">▶</span>
+        </div>
+        <div class="smell-alt"><div class="alt-label">Alternative</div><div class="alt-block">Move <code>require()</code> / <code>import</code> to the top of the module. For genuinely lazy-loaded features, use dynamic <code>import()</code> once at a boundary (route handler init, feature flag check) rather than inside a per-request function.</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const active = { HIGH: true, MED: true, LOW: true, RARE: true };
+let currentLang = 'go';
+
+function toggle(header) {
+  header.closest('.smell').classList.toggle('open');
+}
+
+function switchLang(lang, btn) {
+  document.querySelectorAll('.lang').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById(lang).classList.add('active');
+  btn.classList.add('active');
+  currentLang = lang;
+  applyFilters();
+}
+
+function toggleFilter(btn) {
+  const key = btn.dataset.filter;
+  if (active[key] && Object.values(active).filter(Boolean).length === 1) return;
+  active[key] = !active[key];
+  btn.classList.toggle('on', active[key]);
+  applyFilters();
+}
+
+function applyFilters() {
+  const langEl = document.getElementById(currentLang);
+  let visible = 0;
+  langEl.querySelectorAll('.smell').forEach(el => {
+    const sev = el.dataset.sev;
+    const rare = el.dataset.rare === '1';
+    const show = active[sev] && (!rare || active.RARE);
+    el.style.display = show ? 'block' : 'none';
+    if (show) visible++;
+  });
+  langEl.querySelectorAll('.group').forEach(g => {
+    const any = [...g.querySelectorAll('.smell')].some(s => s.style.display !== 'none');
+    g.style.display = any ? 'block' : 'none';
+  });
+  document.getElementById('count-label').textContent = visible + ' smells';
+}
+
+applyFilters();
+</script>
